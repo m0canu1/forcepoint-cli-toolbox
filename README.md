@@ -24,16 +24,11 @@ When the repository is public and the appliance is allowed outbound HTTPS access
 
 ```text
 forcepoint-cli-toolbox/
-├── dist/                    # Standalone deployment-oriented scripts
-├── scripts/
-│   ├── network/             # Interfaces, routing, neighbours, bonding, VLANs
-│   ├── vpn/                 # VPN/tunnel-oriented diagnostics
-│   ├── system/              # Runtime and host/system information
-│   ├── troubleshooting/     # Read-only diagnostic collectors
-│   ├── ci/                  # Repository safety checks
-│   └── build-dist.sh        # Rebuild/check the dist directory
-├── docs/
+├── dist/                    # Canonical, standalone operational scripts
+├── docs/                    # Usage, compatibility and development notes
 ├── .github/
+│   ├── scripts/             # Repository-only CI/safety helpers
+│   └── workflows/           # GitHub Actions validation
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 └── LICENSE
@@ -94,16 +89,11 @@ Forcepoint appliances may expose a smaller Linux environment than a general-purp
 
 Run `dist/check-runtime.sh` on a target appliance to see which commands are native, provided by BusyBox, or unavailable. See [docs/compatibility.md](docs/compatibility.md) for more details.
 
-## Development and distribution
+## Development
 
-Maintain scripts under `scripts/`. `dist/` is the deployment surface for standalone one-file copies.
+`dist/` is both the canonical source and deployment surface. Edit scripts directly in `dist/`; each script must remain self-contained and safe to copy by itself to an appliance.
 
-After changing scripts, rebuild or validate `dist/`:
-
-```bash
-./scripts/build-dist.sh
-./scripts/build-dist.sh --check
-```
+CI validates Bash syntax, ShellCheck errors, executable permissions, standalone behavior and the repository's read-only/public-safety policy.
 
 See [docs/development.md](docs/development.md).
 
