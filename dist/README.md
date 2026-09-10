@@ -1,6 +1,6 @@
-# Standalone distribution
+# Standalone scripts
 
-Files in this directory are intended to be copied individually to a Forcepoint firewall and executed without cloning the complete repository.
+Files in this directory are the canonical operational scripts for this repository. They are intended to be copied individually to a Forcepoint firewall and executed without cloning the complete repository.
 
 ## Recommended workflow
 
@@ -31,7 +31,7 @@ rm /tmp/get-macs.sh
 
 ## Policy
 
-A script belongs in `dist/` only when it is self-contained at runtime. Distribution scripts must not source files elsewhere in the repository.
+Every script in `dist/` must be self-contained at runtime. Scripts must not source files elsewhere in the repository.
 
 They should:
 
@@ -42,7 +42,7 @@ They should:
 - degrade gracefully when optional commands are unavailable;
 - avoid GNU-specific assumptions where BusyBox compatibility matters.
 
-`dist/` is generated from source scripts under `scripts/`; do not edit deployment copies directly.
+Edit scripts directly in this directory. There is no generated copy or separate source tree.
 
 ## Direct downloads
 
