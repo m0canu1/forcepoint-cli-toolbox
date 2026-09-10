@@ -2,77 +2,125 @@
 
 An unofficial collection of small, read-only Bash utilities for inventory, troubleshooting, and diagnostics on Forcepoint firewalls and their underlying Linux environment.
 
-The repository is intentionally conservative: scripts should prefer inspection over configuration changes, avoid destructive commands, and work with the standard tools commonly available on firewall appliances.
+The project is intentionally conservative: scripts should inspect state rather than change it, avoid destructive commands, and tolerate the reduced userspace commonly found on firewall appliances.
+
+## Recommended usage
+
+For production appliances, keep the repository on an admin workstation or jump host and copy only the standalone script you need from `dist/` to the firewall, preferably under `/tmp`.
+
+```bash
+scp dist/get-macs.sh admin@fw01:/tmp/
+ssh admin@fw01
+chmod +x /tmp/get-macs.sh
+/tmp/get-macs.sh
+rm /tmp/get-macs.sh
+```
+
+You do not need to clone the complete repository on the firewall.
+
+When the repository is public and the appliance is allowed outbound HTTPS access, a standalone script can also be downloaded from `raw.githubusercontent.com`. Download and inspect the file before executing it; do not pipe remote content directly into a shell.
 
 ## Repository layout
 
 ```text
 forcepoint-cli-toolbox/
-├── .github/workflows/       # CI checks
-├── docs/                    # Usage and compatibility notes
+├── dist/                    # Standalone deployment-oriented scripts
 ├── scripts/
-│   ├── network/             # Interfaces, MAC/IP, routes, neighbours, bonding
-│   ├── system/              # Host/system information
-│   └── troubleshooting/     # Read-only diagnostic collectors
+│   ├── network/             # Interfaces, routing, neighbours, bonding, VLANs
+│   ├── vpn/                 # VPN/tunnel-oriented diagnostics
+│   ├── system/              # Runtime and host/system information
+│   ├── troubleshooting/     # Read-only diagnostic collectors
+│   ├── ci/                  # Repository safety checks
+│   └── build-dist.sh        # Rebuild/check the dist directory
+├── docs/
+├── .github/
 ├── CONTRIBUTING.md
-└── README.md
+├── SECURITY.md
+└── LICENSE
 ```
 
-## Quick start
+## Quick examples
 
-Clone the repository and make the scripts executable:
+Display MAC and IP information for all interfaces:
 
 ```bash
-git clone https://github.com/m0canu1/forcepoint-cli-toolbox.git
-cd forcepoint-cli-toolbox
-chmod +x scripts/**/*.sh
+./dist/get-macs.sh
 ```
 
-Example: display MAC and IP information for every interface:
+Filter by interface name using a Bash regular expression:
 
 ```bash
-./scripts/network/get-macs.sh
+./dist/get-macs.sh '^eth'
+./dist/get-macs.sh '^bond'
+./dist/get-macs.sh '^(eth0|eth1|bond0)$'
 ```
 
-Filter interfaces by Bash regular expression:
+Check the kernel routing decision for a documentation-only example destination:
 
 ```bash
-./scripts/network/get-macs.sh '^eth'
-./scripts/network/get-macs.sh '^bond'
-./scripts/network/get-macs.sh '^(eth0|eth1|bond0)$'
+./dist/check-routing-path.sh 203.0.113.10
+./dist/check-routing-path.sh 203.0.113.10 192.0.2.10
+```
+
+Inspect the appliance runtime and BusyBox availability:
+
+```bash
+./dist/check-runtime.sh
 ```
 
 ## Included tools
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/network/get-macs.sh` | Physical/logical interface inventory with current MAC, permanent MAC, MAC comparison, IPv4 and IPv6 addresses |
-| `scripts/network/get-routes.sh` | Dump policy-routing rules and the routing tables referenced by them |
-| `scripts/network/get-neighbors.sh` | Display IPv4/IPv6 neighbour and ARP information |
-| `scripts/network/get-bonds.sh` | Display Linux bonding configuration and member state |
-| `scripts/system/get-system-info.sh` | Collect basic host, kernel, uptime, CPU, memory and filesystem information |
-| `scripts/troubleshooting/collect-network-diagnostics.sh` | Produce a read-only network troubleshooting snapshot |
+| `get-macs.sh` | Physical/logical interface inventory with current/permanent MAC, MAC comparison, IPv4 and IPv6 addresses |
+| `get-interface-details.sh` | Interface type, state, carrier, MTU, speed, duplex, master and driver |
+| `get-interface-counters.sh` | RX/TX bytes, packets, errors and drops from sysfs |
+| `get-routes.sh` | Policy-routing rules, main routing table and referenced routing tables |
+| `check-routing-path.sh` | Kernel routing decision for a destination, optionally with a source address |
+| `get-neighbors.sh` | IPv4/IPv6 neighbour and ARP information |
+| `get-bonds.sh` | Linux bonding configuration and member state |
+| `get-vlans.sh` | VLAN interfaces, VLAN IDs, parent links, state and addresses |
+| `get-vpn-interfaces.sh` | Interfaces matching common VPN/tunnel naming patterns |
+| `get-vpn-routes.sh` | Routes using VPN/tunnel-like interfaces |
+| `collect-vpn-diagnostics.sh` | VPN-like interfaces, routes, policy rules, neighbours and available XFRM data |
+| `get-system-info.sh` | Kernel, uptime, CPU, memory and filesystem information |
+| `get-listening-sockets.sh` | Listening TCP/UDP sockets using `ss` or `netstat` |
+| `check-runtime.sh` | Native/BusyBox command availability report |
+| `collect-network-diagnostics.sh` | General read-only network troubleshooting snapshot |
 
-## Compatibility
+## BusyBox and reduced userspaces
 
-The scripts target Bash on Linux. They deliberately avoid uncommon dependencies where practical.
+Forcepoint appliances may expose a smaller Linux environment than a general-purpose distribution. BusyBox is commonly present. Scripts should prefer normal commands when available and use BusyBox or `/proc`/`/sys` fallbacks where practical.
 
-Common commands used include:
+Run `dist/check-runtime.sh` on a target appliance to see which commands are native, provided by BusyBox, or unavailable. See [docs/compatibility.md](docs/compatibility.md) for more details.
 
-- `ip`
-- `awk`
-- `date`
-- `hostname`
-- `cat`
+## Development and distribution
 
-Some information is optional and is displayed only when the corresponding utility exists, for example `ethtool` or `ss`.
+Maintain scripts under `scripts/`. `dist/` is the deployment surface for standalone one-file copies.
 
-The exact Linux userspace available on Forcepoint appliances can differ by product and release. Test scripts on a non-production appliance or during an appropriate maintenance window before relying on them operationally.
+After changing scripts, rebuild or validate `dist/`:
+
+```bash
+./scripts/build-dist.sh
+./scripts/build-dist.sh --check
+```
+
+See [docs/development.md](docs/development.md).
+
+## Security and privacy
+
+Diagnostic output can contain hostnames, IP addresses, MAC addresses, routes and other environment-specific information. Sanitize output before posting it in public issues or discussions.
+
+Do not commit customer data, credentials, tokens, PSKs, private keys, certificates, packet captures, support bundles or production-specific configuration. See [SECURITY.md](SECURITY.md).
 
 ## Safety policy
 
-Scripts committed to this repository should be read-only by default. They must not change routes, interfaces, firewall policy, VPN configuration, services, kernel parameters, or system files unless the behavior is explicitly documented and intentionally placed in a separate configuration-oriented area in the future.
+Scripts in `dist/` are expected to be read-only. They must not change routes, interfaces, firewall policy, VPN configuration, services, kernel parameters or system files.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
 
 ## Disclaimer
 
-This is an unofficial community/operations toolbox. It is not affiliated with, maintained by, or endorsed by Forcepoint.
+This is an unofficial community/operations toolbox. It is not affiliated with, maintained by, sponsored by, or endorsed by Forcepoint. Product names and trademarks belong to their respective owners.

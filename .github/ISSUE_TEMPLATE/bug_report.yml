@@ -1,0 +1,59 @@
+name: Bug report
+
+description: Report a problem with a script using sanitized information only.
+
+title: "[bug] "
+
+labels: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, keys, PSKs, customer names, internal hostnames, production configuration or unsanitized diagnostic output.
+
+  - type: input
+    id: script
+    attributes:
+      label: Script
+      description: Which script is affected?
+      placeholder: get-macs.sh
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Forcepoint product and version
+      description: Provide only non-sensitive product/version information.
+    validations:
+      required: true
+
+  - type: textarea
+    id: runtime
+    attributes:
+      label: Sanitized runtime information
+      description: Paste relevant sanitized output from dist/check-runtime.sh if available.
+      render: text
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Data-safety confirmation
+      options:
+        - label: I removed credentials, secrets, customer identifiers, internal hostnames and production-specific data from this report.
+          required: true

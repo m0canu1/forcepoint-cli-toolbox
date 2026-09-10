@@ -1,0 +1,29 @@
+# Editor / OS files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local environment / credentials
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.kdb
+
+# Diagnostic data that should not be committed
+*.log
+*.pcap
+*.pcapng
+*.cap
+*.core
+reports/
+support-bundles/
+
+# Temporary files
+*.tmp
+*.bak
+.tmp/
