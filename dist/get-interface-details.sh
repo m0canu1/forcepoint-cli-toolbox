@@ -12,17 +12,23 @@ print_header() {
 
 read_value() {
     local path="$1"
-    local value="-"
+    local value=""
 
-    # Some virtual/tunnel sysfs attributes exist but return EINVAL when read.
-    # Treat unsupported values as unavailable instead of printing kernel errors.
-    if [ -r "$path" ]; then
-        if ! IFS= read -r value < "$path" 2>/dev/null; then
-            value="-"
-        fi
-        [ -z "$value" ] && value="-"
+    # Some sysfs attributes exist for virtual, tunnel, or inactive interfaces
+    # but return EINVAL when read. Use an external reader so stderr can be
+    # suppressed reliably; unsupported values are reported as '-'.
+    if [ ! -r "$path" ]; then
+        printf '%s' "-"
+        return
     fi
 
+    if command -v cat >/dev/null 2>&1; then
+        value="$(cat "$path" 2>/dev/null || true)"
+    elif command -v busybox >/dev/null 2>&1; then
+        value="$(busybox cat "$path" 2>/dev/null || true)"
+    fi
+
+    [ -z "$value" ] && value="-"
     printf '%s' "$value"
 }
 
