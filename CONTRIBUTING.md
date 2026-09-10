@@ -14,26 +14,13 @@ Contributions should keep the toolbox predictable, portable and safe for operati
 - Quote shell variables and keep scripts compatible with Bash.
 - Never commit credentials, tokens, keys, PSKs, certificates, packet captures, support bundles, customer data, internal addressing plans or production-specific values.
 
-## Source and distribution
+## Canonical script location
 
-Maintain source scripts under:
+All operational scripts live directly under `dist/`.
 
-- `scripts/network/`
-- `scripts/vpn/`
-- `scripts/system/`
-- `scripts/troubleshooting/`
+Edit `dist/*.sh` directly. There is no generated copy and no separate source tree.
 
-Do not edit generated standalone scripts in `dist/` directly. After changing a source script, run:
-
-```bash
-./scripts/build-dist.sh
-```
-
-Then verify that distribution files are synchronized:
-
-```bash
-./scripts/build-dist.sh --check
-```
+Every script in `dist/` must be self-contained so it can be copied individually to a firewall and executed without any other repository file.
 
 ## Naming
 
@@ -50,16 +37,20 @@ collect-network-diagnostics.sh
 Before committing:
 
 ```bash
-find scripts dist -type f -name '*.sh' -exec bash -n {} \;
-./scripts/build-dist.sh --check
-./scripts/ci/check-public-safety.sh
+for script in dist/*.sh; do
+    bash -n "$script"
+done
+
+bash .github/scripts/check-public-safety.sh
 ```
 
 If ShellCheck is available:
 
 ```bash
-find scripts dist -type f -name '*.sh' -print0 | xargs -0 shellcheck -S error
+shellcheck -S error dist/*.sh
 ```
+
+GitHub Actions runs the same classes of checks automatically.
 
 ## Documentation
 
