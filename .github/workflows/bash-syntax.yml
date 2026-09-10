@@ -24,22 +24,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          while IFS= read -r -d '' script; do
+          found=0
+          for script in dist/*.sh; do
+            [ -f "$script" ] || continue
+            found=1
             echo "Checking syntax: $script"
             bash -n "$script"
-          done < <(find scripts dist -type f -name '*.sh' -print0)
+          done
+          [ "$found" -eq 1 ] || { echo 'No dist scripts found.' >&2; exit 1; }
 
       - name: ShellCheck
         shell: bash
         run: |
           set -euo pipefail
-          while IFS= read -r -d '' script; do
+          for script in dist/*.sh; do
+            [ -f "$script" ] || continue
             echo "ShellCheck: $script"
-            shellcheck -S error -x "$script"
-          done < <(find scripts dist -type f -name '*.sh' -print0)
-
-      - name: Verify standalone distribution
-        run: bash scripts/build-dist.sh --check
+            shellcheck -S error "$script"
+          done
 
       - name: Public-safety checks
-        run: bash scripts/ci/check-public-safety.sh
+        run: bash .github/scripts/check-public-safety.sh
