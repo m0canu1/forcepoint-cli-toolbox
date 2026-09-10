@@ -13,23 +13,13 @@ New scripts should be:
 - tolerant of reduced appliance userspaces;
 - explicit when information cannot be collected.
 
-## Source vs distribution
+## Canonical source
 
-Source files live under `scripts/`. Standalone deployment copies live in `dist/`.
+`dist/` is the single source of truth for operational scripts.
 
-`dist/` is generated from a fixed manifest by:
+There is no generated distribution layer and no separate source directory. Edit `dist/*.sh` directly.
 
-```bash
-./scripts/build-dist.sh
-```
-
-Check that committed distribution files match the source:
-
-```bash
-./scripts/build-dist.sh --check
-```
-
-Every script listed in the distribution manifest must be self-contained at runtime. It must not source another repository file.
+Every script must remain self-contained at runtime and must not source another repository file.
 
 ## BusyBox
 
@@ -48,12 +38,22 @@ Do not assume a BusyBox applet supports every GNU option.
 
 CI performs:
 
-- Bash syntax validation;
+- Bash syntax validation for `dist/*.sh`;
 - ShellCheck at error severity;
-- `dist/` synchronization checks;
-- a public-safety scan for obvious secrets, sensitive file types and mutating commands in `dist/`.
+- executable-permission checks;
+- standalone-script checks;
+- a public-safety scan for obvious secrets, sensitive file types and mutating commands.
 
-Run the same checks locally before opening a pull request.
+Run the same checks locally before opening a pull request:
+
+```bash
+for script in dist/*.sh; do
+    bash -n "$script"
+done
+
+shellcheck -S error dist/*.sh
+bash .github/scripts/check-public-safety.sh
+```
 
 ## Example data
 
