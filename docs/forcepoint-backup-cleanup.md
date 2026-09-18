@@ -137,6 +137,49 @@ sgrollbackfolder
 
 is never selected for deletion.
 
+## Compatibility and observed SMC behavior
+
+The cleanup logic is Bash-based. The script includes a POSIX-compatible bootstrap so it can also survive SMC versions that explicitly start the configured post-task script through `/bin/sh`.
+
+The following behavior has been observed in the tested environments:
+
+| SMC version | Observed post-task behavior | Result |
+| --- | --- | --- |
+| 7.3.4 | The task runner invoked `sh /usr/local/sbin/forcepoint-backup-cleanup.sh ...` | Requires the Bash re-exec bootstrap included in the current script |
+| 7.4.1 | The cleanup script ran successfully without the observed `/bin/sh` incompatibility | Current script works |
+
+These are environment observations, not a guarantee that every installation of the same SMC version uses an identical task-runner implementation. After an SMC upgrade, validate the post-task execution path with a dry run before relying on automatic deletion.
+
+On the tested 7.3.4 system, the SMC task log showed:
+
+~~~text
+Task script command: sh /usr/local/sbin/forcepoint-backup-cleanup.sh 1>>script.out 2>>script.err
+~~~
+
+Without the bootstrap, this caused:
+
+~~~text
+/usr/local/sbin/forcepoint-backup-cleanup.sh: 3: set: Illegal option -o pipefail
+~~~
+
+because the shell selected as `/bin/sh` did not support Bash's `pipefail` option. The current script detects that it was not started by Bash and immediately performs:
+
+~~~text
+exec bash "$0" "$@"
+~~~
+
+before any Bash-only syntax is evaluated.
+
+For compatibility testing, both invocation forms should succeed:
+
+~~~bash
+sudo -u sgadmin sh /usr/local/sbin/forcepoint-backup-cleanup.sh \
+    --dry-run --no-wait
+
+sudo -u sgadmin bash /usr/local/sbin/forcepoint-backup-cleanup.sh \
+    --dry-run --no-wait
+~~~
+
 ## Recommended installation path
 
 Install the script as:
@@ -483,6 +526,64 @@ If the SMC redirects output to relative files such as `script.out` and `script.e
 find /usr/local/forcepoint/smc \
     \( -name script.out -o -name script.err \) \
     -ls
+~~~
+
+### Check Forcepoint task output and task status
+
+Some SMC versions redirect the post-task script's standard output and standard error to relative files such as:
+
+~~~text
+script.out
+script.err
+~~~
+
+On the tested system these files were available from the SMC script working area. If the exact location is unclear, locate them with:
+
+~~~bash
+find /usr/local/forcepoint/smc \
+    \( -name script.out -o -name script.err \) \
+    -ls
+~~~
+
+Inspect the latest output with:
+
+~~~bash
+tail -n 100 script.out
+tail -n 100 script.err
+~~~
+
+Because Forcepoint can use append redirection (`>>`), these files may contain errors from older executions. A stale historical error does not by itself mean the latest run failed.
+
+The SMC can also keep a task-status history in a file such as `backup_script_log.txt`. Locate it if necessary:
+
+~~~bash
+find /usr/local/forcepoint/smc -name backup_script_log.txt -ls
+~~~
+
+Then inspect the most recent records:
+
+~~~bash
+tail -n 100 backup_script_log.txt
+~~~
+
+A successful execution is represented by a final record similar to:
+
+~~~text
+Operation          : SCRIPT AFTER TASK
+Script name        : /usr/local/sbin/forcepoint-backup-cleanup.sh
+Status             : OK
+~~~
+
+When troubleshooting, correlate three sources for the same execution time:
+
+1. the SMC task log, which shows how the command was invoked;
+2. `script.out` / `script.err`, which capture the post-task process output;
+3. `journalctl -t forcepoint-backup-cleanup`, which contains the cleanup script's own log messages.
+
+After troubleshooting, the append-only `script.out` and `script.err` files can optionally be truncated if operational policy allows it:
+
+~~~bash
+truncate -s 0 script.out script.err
 ~~~
 
 ### Verify backup directory discovery
