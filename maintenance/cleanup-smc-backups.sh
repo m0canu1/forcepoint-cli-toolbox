@@ -88,6 +88,19 @@ read_backup_dir()
             # Trim leading and trailing whitespace without evaluating the value.
             value="${value#"${value%%[![:space:]]*}"}"
             value="${value%"${value##*[![:space:]]}"}"
+
+            # Accept a fully quoted path while still treating the configuration
+            # as data rather than sourcing it as shell code.
+            case "$value" in
+                \"*\")
+                    value="${value#\"}"
+                    value="${value%\"}"
+                    ;;
+                \'*\')
+                    value="${value#\'}"
+                    value="${value%\'}"
+                    ;;
+            esac
         fi
     done < "$CONFIG_FILE"
 
@@ -180,6 +193,9 @@ delete_file()
 BACKUP_DIR="$(read_backup_dir)" ||
     die "SG_BACKUP_DIR was not found or is empty in $CONFIG_FILE"
 
+[[ "$BACKUP_DIR" != *'\${'* ]] ||
+    die "SG_BACKUP_DIR contains an unresolved variable expression: $BACKUP_DIR"
+
 [[ "$BACKUP_DIR" == /* ]] ||
     die "SG_BACKUP_DIR must be an absolute path: $BACKUP_DIR"
 
@@ -192,11 +208,13 @@ BACKUP_DIR="$(read_backup_dir)" ||
 [[ -r "$BACKUP_DIR" ]] ||
     die "Configured backup directory is not readable: $BACKUP_DIR"
 
-[[ -w "$BACKUP_DIR" ]] ||
-    die "Configured backup directory is not writable: $BACKUP_DIR"
-
 [[ -x "$BACKUP_DIR" ]] ||
     die "Configured backup directory is not traversable: $BACKUP_DIR"
+
+if [[ "$DRY_RUN" != true ]]; then
+    [[ -w "$BACKUP_DIR" ]] ||
+        die "Configured backup directory is not writable: $BACKUP_DIR"
+fi
 
 command -v flock >/dev/null 2>&1 ||
     die "flock is required but was not found"

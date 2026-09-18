@@ -14,8 +14,8 @@ if [ -e scripts ]; then
     failed=1
 fi
 
-printf '%s\n' 'Checking dist script permissions...'
-for script in dist/*.sh; do
+printf '%s\n' 'Checking script permissions...'
+for script in dist/*.sh maintenance/*.sh; do
     [ -f "$script" ] || continue
     if [ ! -x "$script" ]; then
         echo "Not executable: $script" >&2

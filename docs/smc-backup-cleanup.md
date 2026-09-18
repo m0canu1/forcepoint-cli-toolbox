@@ -18,15 +18,19 @@ and extracts only the `SG_BACKUP_DIR` property, for example:
 SG_BACKUP_DIR=/mnt/win_share/Backup
 ~~~
 
-The configuration file is **not sourced or evaluated as shell code**. This is intentional because the file contains unrelated configuration values that can include sensitive data.
+The configuration file is **not sourced or evaluated as shell code**. This is intentional because the file contains unrelated configuration values that can include sensitive data. Leading/trailing whitespace is trimmed, and a path enclosed in matching single or double quotes is accepted.
 
 The script fails without deleting anything if:
 
 - `SGConfiguration.txt` is not readable;
 - `SG_BACKUP_DIR` is missing or empty;
+- `SG_BACKUP_DIR` contains an unresolved `${...}` expression;
 - the configured path is not absolute;
-- the configured directory does not exist or is not readable, writable, and traversable;
+- the configured directory does not exist or is not readable and traversable;
+- the configured directory is not writable during a real cleanup run;
 - `flock` is unavailable.
+
+A `--dry-run` does not require write access to the backup directory.
 
 ## Retention policy
 
