@@ -31,7 +31,7 @@ SKIP_WAIT=false
 usage()
 {
     cat <<'EOF'
-Usage: cleanup-smc-backups.sh [--dry-run] [--no-wait] [--help]
+Usage: forcepoint-backup-cleanup.sh [--dry-run] [--no-wait] [--help]
 
 Options:
   --dry-run   Show what would be deleted without deleting anything.
@@ -93,7 +93,7 @@ read_config_value()
     while IFS= read -r line || [[ -n "$line" ]]; do
         line="${line%$'\r'}"
 
-        if [[ "$line" =~ ^[[:space:]]*$key[[:space:]]*=(.*)$ ]]; then
+        if [[ "$line" =~ ^[[:space:]]*${key}[[:space:]]*=(.*)$ ]]; then
             value="$(trim_value "${BASH_REMATCH[1]}")"
         fi
     done < "$file"

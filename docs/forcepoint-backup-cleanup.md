@@ -1,6 +1,6 @@
-# SMC backup cleanup
+# Forcepoint backup cleanup
 
-`maintenance/cleanup-smc-backups.sh` provides retention cleanup for Forcepoint Security Management Center backups.
+`maintenance/forcepoint-backup-cleanup.sh` provides retention cleanup for Forcepoint Security Management Center backups.
 
 The script is designed to be installed on the SMC server and configured in the SMC backup task through **Script to Execute After the Task**.
 
@@ -127,7 +127,7 @@ is never selected for deletion.
 Install the script as:
 
 ~~~text
-/usr/local/sbin/cleanup-smc-backups.sh
+/usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Using a stable absolute path is important because the SMC post-task process can start with a different working directory.
@@ -136,20 +136,20 @@ From a checkout of this repository:
 
 ~~~bash
 sudo install -o root -g root -m 0755 \
-    maintenance/cleanup-smc-backups.sh \
-    /usr/local/sbin/cleanup-smc-backups.sh
+    maintenance/forcepoint-backup-cleanup.sh \
+    /usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Verify the installed file:
 
 ~~~bash
-ls -l /usr/local/sbin/cleanup-smc-backups.sh
+ls -l /usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Expected permissions are similar to:
 
 ~~~text
--rwxr-xr-x root root ... /usr/local/sbin/cleanup-smc-backups.sh
+-rwxr-xr-x root root ... /usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 The script is owned by `root` so the SMC service account can execute it but cannot modify it.
@@ -209,7 +209,7 @@ sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/SGConfiguration.txt \
 Then run the cleanup dry run as the same account:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
+sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh \
     --dry-run --no-wait
 ~~~
 
@@ -228,7 +228,7 @@ Because this is a dry run, nothing is removed.
 Before configuring the SMC task, run:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
+sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh \
     --dry-run --no-wait
 ~~~
 
@@ -258,7 +258,7 @@ After the dry run has been reviewed:
 4. Set the field to:
 
 ~~~text
-/usr/local/sbin/cleanup-smc-backups.sh
+/usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 5. Save the task.
@@ -308,25 +308,25 @@ The expected result is:
 Preview only:
 
 ~~~bash
-/usr/local/sbin/cleanup-smc-backups.sh --dry-run --no-wait
+/usr/local/sbin/forcepoint-backup-cleanup.sh --dry-run --no-wait
 ~~~
 
 Real cleanup without the post-task delay:
 
 ~~~bash
-/usr/local/sbin/cleanup-smc-backups.sh --no-wait
+/usr/local/sbin/forcepoint-backup-cleanup.sh --no-wait
 ~~~
 
 Normal production behavior:
 
 ~~~bash
-/usr/local/sbin/cleanup-smc-backups.sh
+/usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Show help:
 
 ~~~bash
-/usr/local/sbin/cleanup-smc-backups.sh --help
+/usr/local/sbin/forcepoint-backup-cleanup.sh --help
 ~~~
 
 ## Logging
@@ -392,25 +392,26 @@ If neither command shows anything, first verify that the script runs manually as
 Confirm the configured path in **Script to Execute After the Task** is exactly:
 
 ~~~text
-/usr/local/sbin/cleanup-smc-backups.sh
+/usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Check the installed script:
 
 ~~~bash
-ls -l /usr/local/sbin/cleanup-smc-backups.sh
+ls -l /usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Expected permissions are similar to:
 
 ~~~text
--rwxr-xr-x root root ... /usr/local/sbin/cleanup-smc-backups.sh
+-rwxr-xr-x root root ... /usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Run it manually as the post-task account:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh     --dry-run --no-wait
+sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh \
+    --dry-run --no-wait
 ~~~
 
 If manual execution works but no log entry appears when the SMC task runs, temporarily use the execution-account test script documented above to confirm that the SMC is invoking the configured post-task path.
@@ -420,13 +421,15 @@ If manual execution works but no log entry appears when the SMC task runs, tempo
 Check the Management Server setting:
 
 ~~~bash
-grep -E '^[[:space:]]*SG_BACKUP_DIR[[:space:]]*='     /usr/local/forcepoint/smc/data/SGConfiguration.txt
+grep -E '^[[:space:]]*SG_BACKUP_DIR[[:space:]]*=' \
+    /usr/local/forcepoint/smc/data/SGConfiguration.txt
 ~~~
 
 Check the Log Server setting:
 
 ~~~bash
-grep -E '^[[:space:]]*LOG_BACKUP_DIR[[:space:]]*='     /usr/local/forcepoint/smc/data/LogServerConfiguration.txt
+grep -E '^[[:space:]]*LOG_BACKUP_DIR[[:space:]]*=' \
+    /usr/local/forcepoint/smc/data/LogServerConfiguration.txt
 ~~~
 
 For example:
@@ -456,9 +459,11 @@ If the script reports an unresolved variable expression, inspect the configured 
 For an SMC where the hook runs as `sgadmin`:
 
 ~~~bash
-sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/SGConfiguration.txt     && echo "SGConfiguration.txt: READ OK"
+sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/SGConfiguration.txt \
+    && echo "SGConfiguration.txt: READ OK"
 
-sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/LogServerConfiguration.txt     && echo "LogServerConfiguration.txt: READ OK"
+sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/LogServerConfiguration.txt \
+    && echo "LogServerConfiguration.txt: READ OK"
 ~~~
 
 Check the Management Server backup directory:
@@ -502,8 +507,11 @@ SGL automatic: kept=0 would_delete=0
 first confirm that the Log Server directory contains backup directories:
 
 ~~~bash
-find /usr/local/forcepoint/smc/backups     -maxdepth 1     -type d     -name 'sgl_*'     -printf '%f
-' | sort | tail -20
+find /usr/local/forcepoint/smc/backups \
+    -maxdepth 1 \
+    -type d \
+    -name 'sgl_*' \
+    -printf '%f\n' | sort | tail -20
 ~~~
 
 Recognized names include both:
@@ -533,8 +541,11 @@ SGM automatic: kept=0 would_delete=0
 inspect the configured Management Server backup directory:
 
 ~~~bash
-find /mnt/win_share/Backup     -maxdepth 1     -type f     -name 'sgm_*'     -printf '%f
-' | sort | tail -20
+find /mnt/win_share/Backup \
+    -maxdepth 1 \
+    -type f \
+    -name 'sgm_*' \
+    -printf '%f\n' | sort | tail -20
 ~~~
 
 An automatic SGM backup must look like:
@@ -577,7 +588,7 @@ is normally harmless. An SMC task with multiple targets can invoke the post-task
 Check whether a cleanup process is active:
 
 ~~~bash
-pgrep -af cleanup-smc-backups.sh
+pgrep -af forcepoint-backup-cleanup.sh
 ~~~
 
 The lock file itself can remain present under `/tmp` after execution. Its presence does **not** mean the lock is still held; `flock` releases the lock when the process exits.
@@ -616,7 +627,8 @@ findmnt -T /usr/local/forcepoint/smc/backups
 Then reproduce the selection without deleting anything:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh     --dry-run --no-wait
+sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh \
+    --dry-run --no-wait
 ~~~
 
 Do not manually remove backups until the path, retention selection, and permission problem have been understood.
@@ -627,14 +639,14 @@ After pulling a newer repository version, reinstall it:
 
 ~~~bash
 sudo install -o root -g root -m 0755 \
-    maintenance/cleanup-smc-backups.sh \
-    /usr/local/sbin/cleanup-smc-backups.sh
+    maintenance/forcepoint-backup-cleanup.sh \
+    /usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Then run another dry run as the SMC execution account:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
+sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh \
     --dry-run --no-wait
 ~~~
 
@@ -649,7 +661,7 @@ To stop automatic cleanup:
 After the SMC task no longer references it, remove the installed script if desired:
 
 ~~~bash
-sudo rm -f /usr/local/sbin/cleanup-smc-backups.sh
+sudo rm -f /usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 ## Important limitations

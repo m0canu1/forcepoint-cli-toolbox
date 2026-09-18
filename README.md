@@ -69,7 +69,7 @@ Inspect the appliance runtime and BusyBox availability:
 Preview SMC backup retention without deleting anything:
 
 ```bash
-./maintenance/cleanup-smc-backups.sh --dry-run --no-wait
+./maintenance/forcepoint-backup-cleanup.sh --dry-run --no-wait
 ```
 
 ## Included diagnostic tools
@@ -96,7 +96,7 @@ Preview SMC backup retention without deleting anything:
 
 | Script | Purpose |
 | --- | --- |
-| `cleanup-smc-backups.sh` | Retain the newest Management Server and Log Server backup dates using their respective SMC configuration paths |
+| `forcepoint-backup-cleanup.sh` | Retain the newest Management Server and Log Server backup dates using their respective SMC configuration paths |
 
 Maintenance scripts are documented separately because they can modify or delete data. See [maintenance/README.md](maintenance/README.md).
 
