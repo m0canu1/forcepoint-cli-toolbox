@@ -32,7 +32,7 @@ Use lowercase descriptive filenames such as:
 get-routes.sh
 get-interface-counters.sh
 collect-network-diagnostics.sh
-cleanup-smc-backups.sh
+forcepoint-backup-cleanup.sh
 ```
 
 ## Validation

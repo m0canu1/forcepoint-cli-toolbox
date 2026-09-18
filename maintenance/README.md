@@ -8,37 +8,41 @@ Unlike the diagnostic scripts in `dist/`, maintenance scripts are not read-only.
 
 | Script | Purpose |
 | --- | --- |
-| `cleanup-smc-backups.sh` | Apply retention to Forcepoint SMC backup files and directories using `SG_BACKUP_DIR` from `SGConfiguration.txt` |
+| `forcepoint-backup-cleanup.sh` | Apply retention to Management Server backups from `SG_BACKUP_DIR` and Log Server backups from `LOG_BACKUP_DIR` |
 
-## SMC backup cleanup quick start
+## Forcepoint backup cleanup quick start
 
 Install the script on the SMC server:
 
 ~~~bash
 sudo install -o root -g root -m 0755 \
-    maintenance/cleanup-smc-backups.sh \
-    /usr/local/sbin/cleanup-smc-backups.sh
+    maintenance/forcepoint-backup-cleanup.sh \
+    /usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
 Test it as the SMC post-task account, commonly `sgadmin`:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
+sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh \
     --dry-run --no-wait
 ~~~
 
 After reviewing the dry-run output, edit the SMC backup task and set **Script to Execute After the Task** to:
 
 ~~~text
-/usr/local/sbin/cleanup-smc-backups.sh
+/usr/local/sbin/forcepoint-backup-cleanup.sh
 ~~~
 
-The script automatically reads the backup path from:
+The script automatically discovers both backup locations:
 
 ~~~text
 /usr/local/forcepoint/smc/data/SGConfiguration.txt
+  -> SG_BACKUP_DIR
+
+/usr/local/forcepoint/smc/data/LogServerConfiguration.txt
+  -> LOG_BACKUP_DIR
 ~~~
 
-using its `SG_BACKUP_DIR` property.
+A value such as `LOG_BACKUP_DIR=${SG_DATA_ROOT_DIR}/backups` is safely resolved to the SMC installation root without sourcing the configuration file.
 
-For the complete installation procedure, execution-account check, retention behavior, SMC task configuration, logging, and rollback instructions, see [SMC backup cleanup](../docs/smc-backup-cleanup.md).
+For the complete installation procedure, execution-account check, retention behavior, SMC task configuration, logging, troubleshooting, and rollback instructions, see [Forcepoint backup cleanup](../docs/forcepoint-backup-cleanup.md).
