@@ -48,7 +48,8 @@ The configuration file is **not sourced or evaluated as shell code**. The script
 You can verify the configured backup path with:
 
 ~~~bash
-grep -E '^[[:space:]]*SG_BACKUP_DIR[[:space:]]*='     /usr/local/forcepoint/smc/data/SGConfiguration.txt
+grep -E '^[[:space:]]*SG_BACKUP_DIR[[:space:]]*=' \
+    /usr/local/forcepoint/smc/data/SGConfiguration.txt
 ~~~
 
 Do not copy the complete `SGConfiguration.txt` into issues, tickets, or public logs.
@@ -117,7 +118,7 @@ is never selected for deletion.
 Install the script as:
 
 ~~~text
-/usr/local/sbin/forcepoint-backup-cleanup.sh
+/usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 Using a stable absolute path is important because the SMC post-task process can start with a different working directory.
@@ -125,19 +126,21 @@ Using a stable absolute path is important because the SMC post-task process can 
 From a checkout of this repository:
 
 ~~~bash
-sudo install -o root -g root -m 0755     maintenance/cleanup-smc-backups.sh     /usr/local/sbin/forcepoint-backup-cleanup.sh
+sudo install -o root -g root -m 0755 \
+    maintenance/cleanup-smc-backups.sh \
+    /usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 Verify the installed file:
 
 ~~~bash
-ls -l /usr/local/sbin/forcepoint-backup-cleanup.sh
+ls -l /usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 Expected permissions are similar to:
 
 ~~~text
--rwxr-xr-x root root ... /usr/local/sbin/forcepoint-backup-cleanup.sh
+-rwxr-xr-x root root ... /usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 The script is owned by `root` so the SMC service account can execute it but cannot modify it.
@@ -190,13 +193,15 @@ sudo rm -f /usr/local/sbin/forcepoint-post-backup-test.sh
 If the post-task hook runs as `sgadmin`, verify that it can read the SMC configuration file:
 
 ~~~bash
-sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/SGConfiguration.txt     && echo "SGConfiguration.txt: READ OK"
+sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/SGConfiguration.txt \
+    && echo "SGConfiguration.txt: READ OK"
 ~~~
 
 Then run the cleanup dry run as the same account:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh     --dry-run --no-wait
+sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
+    --dry-run --no-wait
 ~~~
 
 This verifies that the account can:
@@ -213,7 +218,8 @@ Because this is a dry run, nothing is removed.
 Before configuring the SMC task, run:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh     --dry-run --no-wait
+sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
+    --dry-run --no-wait
 ~~~
 
 Typical output includes lines similar to:
@@ -241,7 +247,7 @@ After the dry run has been reviewed:
 4. Set the field to:
 
 ~~~text
-/usr/local/sbin/forcepoint-backup-cleanup.sh
+/usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 5. Save the task.
@@ -291,25 +297,25 @@ The expected result is:
 Preview only:
 
 ~~~bash
-/usr/local/sbin/forcepoint-backup-cleanup.sh --dry-run --no-wait
+/usr/local/sbin/cleanup-smc-backups.sh --dry-run --no-wait
 ~~~
 
 Real cleanup without the post-task delay:
 
 ~~~bash
-/usr/local/sbin/forcepoint-backup-cleanup.sh --no-wait
+/usr/local/sbin/cleanup-smc-backups.sh --no-wait
 ~~~
 
 Normal production behavior:
 
 ~~~bash
-/usr/local/sbin/forcepoint-backup-cleanup.sh
+/usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 Show help:
 
 ~~~bash
-/usr/local/sbin/forcepoint-backup-cleanup.sh --help
+/usr/local/sbin/cleanup-smc-backups.sh --help
 ~~~
 
 ## Logging
@@ -333,13 +339,16 @@ journalctl -t forcepoint-backup-cleanup -f
 After pulling a newer repository version, reinstall it:
 
 ~~~bash
-sudo install -o root -g root -m 0755     maintenance/cleanup-smc-backups.sh     /usr/local/sbin/forcepoint-backup-cleanup.sh
+sudo install -o root -g root -m 0755 \
+    maintenance/cleanup-smc-backups.sh \
+    /usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 Then run another dry run as the SMC execution account:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh     --dry-run --no-wait
+sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
+    --dry-run --no-wait
 ~~~
 
 ## Disable or remove the cleanup
@@ -353,7 +362,7 @@ To stop automatic cleanup:
 After the SMC task no longer references it, remove the installed script if desired:
 
 ~~~bash
-sudo rm -f /usr/local/sbin/forcepoint-backup-cleanup.sh
+sudo rm -f /usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 ## Important limitations

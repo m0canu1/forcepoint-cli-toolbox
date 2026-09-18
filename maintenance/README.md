@@ -15,19 +15,22 @@ Unlike the diagnostic scripts in `dist/`, maintenance scripts are not read-only.
 Install the script on the SMC server:
 
 ~~~bash
-sudo install -o root -g root -m 0755     maintenance/cleanup-smc-backups.sh     /usr/local/sbin/forcepoint-backup-cleanup.sh
+sudo install -o root -g root -m 0755 \
+    maintenance/cleanup-smc-backups.sh \
+    /usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 Test it as the SMC post-task account, commonly `sgadmin`:
 
 ~~~bash
-sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh     --dry-run --no-wait
+sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
+    --dry-run --no-wait
 ~~~
 
 After reviewing the dry-run output, edit the SMC backup task and set **Script to Execute After the Task** to:
 
 ~~~text
-/usr/local/sbin/forcepoint-backup-cleanup.sh
+/usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
 The script automatically reads the backup path from:
