@@ -45,4 +45,4 @@ The script automatically discovers both backup locations:
 
 A value such as `LOG_BACKUP_DIR=${SG_DATA_ROOT_DIR}/backups` is safely resolved to the SMC installation root without sourcing the configuration file.
 
-For the complete installation procedure, execution-account check, retention behavior, SMC task configuration, logging, and rollback instructions, see [SMC backup cleanup](../docs/smc-backup-cleanup.md).
+For the complete installation procedure, execution-account check, retention behavior, SMC task configuration, logging, troubleshooting, and rollback instructions, see [SMC backup cleanup](../docs/smc-backup-cleanup.md).
