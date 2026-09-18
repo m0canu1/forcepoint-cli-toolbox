@@ -345,6 +345,282 @@ journalctl -t forcepoint-backup-cleanup -n 100
 journalctl -t forcepoint-backup-cleanup -f
 ~~~
 
+## Troubleshooting
+
+### Check cleanup logs with journalctl
+
+The script writes messages with the syslog tag:
+
+~~~text
+forcepoint-backup-cleanup
+~~~
+
+Show all available cleanup messages:
+
+~~~bash
+journalctl -t forcepoint-backup-cleanup
+~~~
+
+Show the latest 100 messages without opening a pager:
+
+~~~bash
+journalctl -t forcepoint-backup-cleanup -n 100 --no-pager
+~~~
+
+Show only messages from today:
+
+~~~bash
+journalctl -t forcepoint-backup-cleanup --since today
+~~~
+
+Follow the cleanup while triggering the SMC backup task:
+
+~~~bash
+journalctl -t forcepoint-backup-cleanup -f
+~~~
+
+If the system forwards syslog to traditional files, also check:
+
+~~~bash
+grep 'forcepoint-backup-cleanup' /var/log/messages
+~~~
+
+If neither command shows anything, first verify that the script runs manually as the same account used by the SMC post-task hook.
+
+### Verify that the SMC actually executes the script
+
+Confirm the configured path in **Script to Execute After the Task** is exactly:
+
+~~~text
+/usr/local/sbin/cleanup-smc-backups.sh
+~~~
+
+Check the installed script:
+
+~~~bash
+ls -l /usr/local/sbin/cleanup-smc-backups.sh
+~~~
+
+Expected permissions are similar to:
+
+~~~text
+-rwxr-xr-x root root ... /usr/local/sbin/cleanup-smc-backups.sh
+~~~
+
+Run it manually as the post-task account:
+
+~~~bash
+sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh     --dry-run --no-wait
+~~~
+
+If manual execution works but no log entry appears when the SMC task runs, temporarily use the execution-account test script documented above to confirm that the SMC is invoking the configured post-task path.
+
+### Verify backup directory discovery
+
+Check the Management Server setting:
+
+~~~bash
+grep -E '^[[:space:]]*SG_BACKUP_DIR[[:space:]]*='     /usr/local/forcepoint/smc/data/SGConfiguration.txt
+~~~
+
+Check the Log Server setting:
+
+~~~bash
+grep -E '^[[:space:]]*LOG_BACKUP_DIR[[:space:]]*='     /usr/local/forcepoint/smc/data/LogServerConfiguration.txt
+~~~
+
+For example:
+
+~~~text
+SG_BACKUP_DIR=/mnt/win_share/Backup
+LOG_BACKUP_DIR=${SG_DATA_ROOT_DIR}/backups
+~~~
+
+With the standard SMC installation path, the second value resolves to:
+
+~~~text
+/usr/local/forcepoint/smc/backups
+~~~
+
+A normal dry run should therefore contain lines similar to:
+
+~~~text
+Using SGM backup directory from /usr/local/forcepoint/smc/data/SGConfiguration.txt: /mnt/win_share/Backup
+Using SGL backup directory from /usr/local/forcepoint/smc/data/LogServerConfiguration.txt: /usr/local/forcepoint/smc/backups
+~~~
+
+If the script reports an unresolved variable expression, inspect the configured value. Only the expected `${SG_DATA_ROOT_DIR}` token is resolved automatically; unexpected variable expressions cause the script to stop without deleting anything.
+
+### Verify permissions as the post-task account
+
+For an SMC where the hook runs as `sgadmin`:
+
+~~~bash
+sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/SGConfiguration.txt     && echo "SGConfiguration.txt: READ OK"
+
+sudo -u sgadmin test -r /usr/local/forcepoint/smc/data/LogServerConfiguration.txt     && echo "LogServerConfiguration.txt: READ OK"
+~~~
+
+Check the Management Server backup directory:
+
+~~~bash
+sudo -u sgadmin test -r /mnt/win_share/Backup && echo "SGM: READ OK"
+sudo -u sgadmin test -x /mnt/win_share/Backup && echo "SGM: TRAVERSE OK"
+sudo -u sgadmin test -w /mnt/win_share/Backup && echo "SGM: WRITE OK"
+~~~
+
+Check the Log Server backup directory:
+
+~~~bash
+sudo -u sgadmin test -r /usr/local/forcepoint/smc/backups && echo "SGL: READ OK"
+sudo -u sgadmin test -x /usr/local/forcepoint/smc/backups && echo "SGL: TRAVERSE OK"
+sudo -u sgadmin test -w /usr/local/forcepoint/smc/backups && echo "SGL: WRITE OK"
+~~~
+
+If your configured directories are different, replace the example paths with the values reported by the cleanup script.
+
+Useful read-only filesystem checks are:
+
+~~~bash
+ls -ld /mnt/win_share/Backup
+ls -ld /usr/local/forcepoint/smc/backups
+
+findmnt -T /mnt/win_share/Backup
+findmnt -T /usr/local/forcepoint/smc/backups
+~~~
+
+A dry run requires read and traverse access. A real cleanup additionally requires write access.
+
+### No SGL backups are detected
+
+If the summary contains:
+
+~~~text
+SGL automatic: kept=0 would_delete=0
+~~~
+
+first confirm that the Log Server directory contains backup directories:
+
+~~~bash
+find /usr/local/forcepoint/smc/backups     -maxdepth 1     -type d     -name 'sgl_*'     -printf '%f
+' | sort | tail -20
+~~~
+
+Recognized names include both:
+
+~~~text
+sgl_v7.4.1.12025_20260918_070000_no_logs_zip
+~~~
+
+and names containing a description:
+
+~~~text
+sgl_v7.3.1.11715_20260201_230000_Backup giornaliero no Log Files_no_logs_zip
+~~~
+
+The entry must be a directory, contain a `YYYYMMDD_HHMMSS` timestamp, and end in `_no_logs_zip`.
+
+If SGL directories exist but none are detected, compare their names with these forms before changing the matching expression.
+
+### No SGM backups are detected
+
+If the summary contains:
+
+~~~text
+SGM automatic: kept=0 would_delete=0
+~~~
+
+inspect the configured Management Server backup directory:
+
+~~~bash
+find /mnt/win_share/Backup     -maxdepth 1     -type f     -name 'sgm_*'     -printf '%f
+' | sort | tail -20
+~~~
+
+An automatic SGM backup must look like:
+
+~~~text
+sgm_v7.3.4.11739_20260918_095643.zip
+~~~
+
+A manual/commented backup contains additional text after the timestamp, for example:
+
+~~~text
+sgm_v7.3.4.11739_20260917_071257_Performed before Update Package 2067 activation.zip
+~~~
+
+Manual/commented backups do not count toward the five automatic SGM dates.
+
+### More than five files are kept
+
+Retention is based on **five distinct backup dates**, not five files.
+
+If two automatic backups exist on the same retained date, both are kept. For example:
+
+~~~text
+sgm_..._20260918_095643.zip
+sgm_..._20260918_103659.zip
+~~~
+
+Both belong to the retained date `20260918`, so a summary can legitimately report more than five kept files.
+
+### "Another cleanup instance is already running"
+
+The message:
+
+~~~text
+Another cleanup instance is already running. Exiting.
+~~~
+
+is normally harmless. An SMC task with multiple targets can invoke the post-task script more than once. The first process holds the `flock` lock while it waits and performs cleanup; an overlapping invocation exits.
+
+Check whether a cleanup process is active:
+
+~~~bash
+pgrep -af cleanup-smc-backups.sh
+~~~
+
+The lock file itself can remain present under `/tmp` after execution. Its presence does **not** mean the lock is still held; `flock` releases the lock when the process exits.
+
+### The script reports that flock is missing
+
+Check availability with:
+
+~~~bash
+command -v flock
+~~~
+
+The cleanup intentionally refuses to run without `flock`, because concurrent post-task executions could otherwise process the backup directories at the same time.
+
+Do not add or replace system packages on a Forcepoint SMC solely to satisfy this dependency without first checking the supported appliance maintenance procedure.
+
+### Deletion fails but dry-run works
+
+If the dry run succeeds but a real cleanup reports deletion errors:
+
+1. verify write access as the SMC execution account;
+2. check whether the Management Server path is a network mount;
+3. inspect mount state and options;
+4. confirm that the files/directories are owned or writable as expected.
+
+Useful commands:
+
+~~~bash
+ls -ld /mnt/win_share/Backup
+findmnt -T /mnt/win_share/Backup
+
+ls -ld /usr/local/forcepoint/smc/backups
+findmnt -T /usr/local/forcepoint/smc/backups
+~~~
+
+Then reproduce the selection without deleting anything:
+
+~~~bash
+sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh     --dry-run --no-wait
+~~~
+
+Do not manually remove backups until the path, retention selection, and permission problem have been understood.
+
 ## Updating the installed script
 
 After pulling a newer repository version, reinstall it:
