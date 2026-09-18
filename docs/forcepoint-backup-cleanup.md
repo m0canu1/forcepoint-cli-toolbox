@@ -282,6 +282,14 @@ After the dry run has been reviewed:
 
 No command-line arguments are required in the SMC field. Normal execution performs the real cleanup.
 
+Forcepoint may wrap the configured command and invoke it explicitly through `sh`, for example:
+
+~~~text
+sh /usr/local/sbin/forcepoint-backup-cleanup.sh 1>>script.out 2>>script.err
+~~~
+
+The cleanup script therefore contains a small POSIX-compatible bootstrap at the top. If it was started by `sh`, it immediately re-executes itself with Bash before any Bash-only syntax such as `set -o pipefail`, `[[ ... ]]`, associative arrays, or `mapfile` is evaluated.
+
 The script itself includes the 60-second delay used for post-task execution, so the SMC configuration does not need a separate delay.
 
 ## Why the script uses a lock and a delay
@@ -430,6 +438,52 @@ sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh \
 ~~~
 
 If manual execution works but no log entry appears when the SMC task runs, temporarily use the execution-account test script documented above to confirm that the SMC is invoking the configured post-task path.
+
+### Forcepoint runs the script with sh
+
+If the SMC task log contains a command similar to:
+
+~~~text
+Task script command: sh /usr/local/sbin/forcepoint-backup-cleanup.sh 1>>script.out 2>>script.err
+~~~
+
+that is expected. Forcepoint is explicitly starting the configured script through `sh`.
+
+Older versions of this cleanup script could fail immediately with:
+
+~~~text
+set: Illegal option -o pipefail
+~~~
+
+because `/bin/sh` may not be Bash. The current script detects this condition and re-executes itself using `bash`.
+
+To reproduce the SMC invocation path without deleting anything:
+
+~~~bash
+sudo -u sgadmin sh /usr/local/sbin/forcepoint-backup-cleanup.sh \
+    --dry-run --no-wait
+~~~
+
+This must behave the same as:
+
+~~~bash
+sudo -u sgadmin bash /usr/local/sbin/forcepoint-backup-cleanup.sh \
+    --dry-run --no-wait
+~~~
+
+Check which shell `/bin/sh` points to with:
+
+~~~bash
+readlink -f /bin/sh
+~~~
+
+If the SMC redirects output to relative files such as `script.out` and `script.err`, inspect the SMC script working directory or locate them with:
+
+~~~bash
+find /usr/local/forcepoint/smc \
+    \( -name script.out -o -name script.err \) \
+    -ls
+~~~
 
 ### Verify backup directory discovery
 

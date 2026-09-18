@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+# Forcepoint SMC can invoke post-task scripts explicitly through /bin/sh,
+# which ignores this shebang. Keep this bootstrap POSIX-compatible so an
+# sh-started process can immediately re-exec the script under Bash.
+if [ -z "${BASH_VERSION:-}" ]; then
+    if command -v bash >/dev/null 2>&1; then
+        exec bash "$0" "$@"
+    fi
+
+    echo "ERROR: bash is required to run forcepoint-backup-cleanup.sh." >&2
+    exit 1
+fi
+
 set -euo pipefail
 
 # Forcepoint SMC backup retention cleanup.
