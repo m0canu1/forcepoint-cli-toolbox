@@ -10,7 +10,7 @@ Normal execution is destructive. Always validate the target directory and run a 
 
 The script:
 
-- reads the Management Server backup directory from `/usr/local/forcepoint/smc/data/SGConfiguration.txt` using `SG_BACKUP_DIR`;
+- reads the Management Server backup directory from `/usr/local/forcepoint/smc/data/SGConfiguration.txt` using `SG_BACKUP_DIR`, or falls back to `${SG_DATA_ROOT_DIR}/backups` when that property is absent;
 - reads the Log Server backup directory from `/usr/local/forcepoint/smc/data/LogServerConfiguration.txt` using `LOG_BACKUP_DIR`;
 - safely resolves the `SG_DATA_ROOT_DIR` token without sourcing either configuration file;
 - keeps the 5 most recent distinct automatic Log Server backup dates;
@@ -33,6 +33,20 @@ Management Server configuration:
 /usr/local/forcepoint/smc/data/SGConfiguration.txt
 SG_BACKUP_DIR=/mnt/win_share/Backup
 ~~~
+
+If `SG_BACKUP_DIR` is **not present** in `SGConfiguration.txt`, the script uses the Forcepoint default backup directory:
+
+~~~text
+${SG_DATA_ROOT_DIR}/backups
+~~~
+
+With the standard installation path this resolves to:
+
+~~~text
+/usr/local/forcepoint/smc/backups
+~~~
+
+The fallback is used only when the `SG_BACKUP_DIR` key is absent. If the key exists but its value is empty or invalid, the script stops instead of silently ignoring the configuration.
 
 Log Server configuration:
 
@@ -66,7 +80,8 @@ Do not copy the complete `SGConfiguration.txt` into issues, tickets, or public l
 The script fails without deleting anything if:
 
 - either SMC configuration file is not readable;
-- `SG_BACKUP_DIR` or `LOG_BACKUP_DIR` is missing or empty;
+- `LOG_BACKUP_DIR` is missing or empty;
+- `SG_BACKUP_DIR` is present but empty or invalid;
 - a backup path contains an unresolved `${...}` expression other than the supported `SG_DATA_ROOT_DIR` token;
 - the configured path is not absolute;
 - the configured path is `/`;
@@ -445,14 +460,22 @@ With the standard SMC installation path, the second value resolves to:
 /usr/local/forcepoint/smc/backups
 ~~~
 
-A normal dry run should therefore contain lines similar to:
+A normal dry run with an explicit Management Server path should contain lines similar to:
 
 ~~~text
 Using SGM backup directory from /usr/local/forcepoint/smc/data/SGConfiguration.txt: /mnt/win_share/Backup
 Using SGL backup directory from /usr/local/forcepoint/smc/data/LogServerConfiguration.txt: /usr/local/forcepoint/smc/backups
 ~~~
 
+If `SG_BACKUP_DIR` is absent, the script logs the fallback explicitly:
+
+~~~text
+SG_BACKUP_DIR not found in /usr/local/forcepoint/smc/data/SGConfiguration.txt; using default SGM backup directory: /usr/local/forcepoint/smc/backups
+~~~
+
 If the script reports an unresolved variable expression, inspect the configured value. Only the expected `${SG_DATA_ROOT_DIR}` token is resolved automatically; unexpected variable expressions cause the script to stop without deleting anything.
+
+If `grep` returns no `SG_BACKUP_DIR` line, that is valid: the script uses `${SG_DATA_ROOT_DIR}/backups` for Management Server backups and reports that fallback in the journal.
 
 ### Verify permissions as the post-task account
 
