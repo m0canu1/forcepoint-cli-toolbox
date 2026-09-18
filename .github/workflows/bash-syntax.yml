@@ -25,19 +25,19 @@ jobs:
         run: |
           set -euo pipefail
           found=0
-          for script in dist/*.sh; do
+          for script in dist/*.sh maintenance/*.sh; do
             [ -f "$script" ] || continue
             found=1
             echo "Checking syntax: $script"
             bash -n "$script"
           done
-          [ "$found" -eq 1 ] || { echo 'No dist scripts found.' >&2; exit 1; }
+          [ "$found" -eq 1 ] || { echo 'No operational scripts found.' >&2; exit 1; }
 
       - name: ShellCheck
         shell: bash
         run: |
           set -euo pipefail
-          for script in dist/*.sh; do
+          for script in dist/*.sh maintenance/*.sh; do
             [ -f "$script" ] || continue
             echo "ShellCheck: $script"
             shellcheck -S error "$script"

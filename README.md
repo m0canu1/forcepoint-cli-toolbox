@@ -1,12 +1,14 @@
 # Forcepoint CLI Toolbox
 
-An unofficial collection of small, read-only Bash utilities for inventory, troubleshooting, and diagnostics on Forcepoint firewalls and their underlying Linux environment.
+An unofficial collection of small Bash utilities for inventory, troubleshooting, diagnostics, and selected maintenance tasks on Forcepoint systems and their underlying Linux environment.
 
-The project is intentionally conservative: scripts should inspect state rather than change it, avoid destructive commands, and tolerate the reduced userspace commonly found on firewall appliances.
+The project is intentionally conservative. Diagnostic scripts should inspect state rather than change it. Maintenance scripts are kept separate, documented explicitly, and should be reviewed and tested before use.
 
 ## Recommended usage
 
-For production appliances, keep the repository on an admin workstation or jump host and copy only the standalone script you need from `dist/` to the firewall, preferably under `/tmp`.
+For production appliances, keep the repository on an admin workstation or jump host and copy only the standalone script you need from `dist/` or `maintenance/` to the target system.
+
+For example:
 
 ```bash
 scp dist/get-macs.sh admin@fw01:/tmp/
@@ -16,15 +18,16 @@ chmod +x /tmp/get-macs.sh
 rm /tmp/get-macs.sh
 ```
 
-You do not need to clone the complete repository on the firewall.
+You do not need to clone the complete repository on the firewall or SMC server.
 
-When the repository is public and the appliance is allowed outbound HTTPS access, a standalone script can also be downloaded from `raw.githubusercontent.com`. Download and inspect the file before executing it; do not pipe remote content directly into a shell.
+When the repository is public and the target system is allowed outbound HTTPS access, a standalone script can also be downloaded from `raw.githubusercontent.com`. Download and inspect the file before executing it; do not pipe remote content directly into a shell.
 
 ## Repository layout
 
 ```text
 forcepoint-cli-toolbox/
-├── dist/                    # Canonical, standalone operational scripts
+├── dist/                    # Read-only diagnostic and inventory scripts
+├── maintenance/             # Explicitly mutating maintenance scripts
 ├── docs/                    # Usage, compatibility and development notes
 ├── .github/
 │   ├── scripts/             # Repository-only CI/safety helpers
@@ -63,7 +66,13 @@ Inspect the appliance runtime and BusyBox availability:
 ./dist/check-runtime.sh
 ```
 
-## Included tools
+Preview SMC backup retention without deleting anything:
+
+```bash
+./maintenance/cleanup-smc-backups.sh --dry-run --no-wait
+```
+
+## Included diagnostic tools
 
 | Script | Purpose |
 | --- | --- |
@@ -83,6 +92,14 @@ Inspect the appliance runtime and BusyBox availability:
 | `check-runtime.sh` | Native/BusyBox command availability report |
 | `collect-network-diagnostics.sh` | General read-only network troubleshooting snapshot |
 
+## Included maintenance tools
+
+| Script | Purpose |
+| --- | --- |
+| `cleanup-smc-backups.sh` | Retain the newest SMC backup dates and remove older automatic/manual backup archives using `SG_BACKUP_DIR` from `SGConfiguration.txt` |
+
+Maintenance scripts are documented separately because they can modify or delete data. See [maintenance/README.md](maintenance/README.md).
+
 ## BusyBox and reduced userspaces
 
 Forcepoint appliances may expose a smaller Linux environment than a general-purpose distribution. BusyBox is commonly present. Scripts should prefer normal commands when available and use BusyBox or `/proc`/`/sys` fallbacks where practical.
@@ -91,9 +108,11 @@ Run `dist/check-runtime.sh` on a target appliance to see which commands are nati
 
 ## Development
 
-`dist/` is both the canonical source and deployment surface. Edit scripts directly in `dist/`; each script must remain self-contained and safe to copy by itself to an appliance.
+`dist/` contains read-only diagnostic scripts. `maintenance/` contains scripts whose purpose requires modifying or deleting data.
 
-CI validates Bash syntax, ShellCheck errors, executable permissions, standalone behavior and the repository's read-only/public-safety policy.
+Every operational script should remain self-contained and safe to copy by itself to a target Forcepoint system.
+
+CI validates Bash syntax and ShellCheck errors for both areas, while the repository read-only/public-safety policy is applied to `dist/`.
 
 See [docs/development.md](docs/development.md).
 
@@ -106,6 +125,8 @@ Do not commit customer data, credentials, tokens, PSKs, private keys, certificat
 ## Safety policy
 
 Scripts in `dist/` are expected to be read-only. They must not change routes, interfaces, firewall policy, VPN configuration, services, kernel parameters or system files.
+
+Scripts in `maintenance/` may intentionally modify or delete data. They must be narrowly scoped, documented, validate their target paths, and provide a non-destructive test mode when practical.
 
 ## License
 

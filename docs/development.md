@@ -2,22 +2,32 @@
 
 ## Design goals
 
-The toolbox is designed for operational diagnostics on firewall appliances rather than as a general Linux administration framework.
+The toolbox is designed for operational work on Forcepoint systems rather than as a general Linux administration framework.
 
-New scripts should be:
+Diagnostic scripts should be:
 
-- read-only by default;
+- read-only;
 - understandable without hidden state;
 - conservative about dependencies;
 - useful when copied as a single file;
 - tolerant of reduced appliance userspaces;
 - explicit when information cannot be collected.
 
+Maintenance scripts may intentionally modify or delete data, but should be:
+
+- narrowly scoped to the documented maintenance task;
+- defensive about path discovery and validation;
+- explicit in their logs;
+- safe against duplicate/concurrent execution when relevant;
+- testable without changes through a dry-run or equivalent mode when practical.
+
 ## Canonical source
 
-`dist/` is the single source of truth for operational scripts.
+`dist/` is the source of truth for read-only diagnostic scripts.
 
-There is no generated distribution layer and no separate source directory. Edit `dist/*.sh` directly.
+`maintenance/` is the source of truth for explicitly mutating operational scripts.
+
+There is no generated distribution layer and no separate source directory. Edit the script in its operational directory directly.
 
 Every script must remain self-contained at runtime and must not source another repository file.
 
@@ -38,22 +48,25 @@ Do not assume a BusyBox applet supports every GNU option.
 
 CI performs:
 
-- Bash syntax validation for `dist/*.sh`;
-- ShellCheck at error severity;
-- executable-permission checks;
-- standalone-script checks;
-- a public-safety scan for obvious secrets, sensitive file types and mutating commands.
+- Bash syntax validation for `dist/*.sh` and `maintenance/*.sh`;
+- ShellCheck at error severity for both script groups;
+- executable-permission checks for `dist/*.sh`;
+- standalone-script checks for `dist/*.sh`;
+- a public-safety scan for obvious secrets, sensitive file types and mutating commands in `dist/`.
 
 Run the same checks locally before opening a pull request:
 
 ```bash
-for script in dist/*.sh; do
+for script in dist/*.sh maintenance/*.sh; do
+    [ -f "$script" ] || continue
     bash -n "$script"
 done
 
-shellcheck -S error dist/*.sh
+shellcheck -S error dist/*.sh maintenance/*.sh
 bash .github/scripts/check-public-safety.sh
 ```
+
+For maintenance scripts, also exercise the dry-run path against representative sanitized test data before enabling destructive execution.
 
 ## Example data
 
