@@ -32,12 +32,17 @@ jobs:
             bash -n "$script"
           done
           [ "$found" -eq 1 ] || { echo 'No operational scripts found.' >&2; exit 1; }
+          bash -n .github/scripts/test-forcepoint-backup-cleanup.sh
 
       - name: SMC sh-wrapper smoke test
         shell: bash
         run: |
           set -euo pipefail
           sh maintenance/forcepoint-backup-cleanup.sh --help >/dev/null
+
+      - name: Backup cleanup functional tests
+        shell: bash
+        run: bash .github/scripts/test-forcepoint-backup-cleanup.sh
 
       - name: ShellCheck
         shell: bash
