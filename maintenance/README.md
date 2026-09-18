@@ -8,7 +8,7 @@ Unlike the diagnostic scripts in `dist/`, maintenance scripts are not read-only.
 
 | Script | Purpose |
 | --- | --- |
-| `cleanup-smc-backups.sh` | Apply retention to Forcepoint SMC backup files and directories using `SG_BACKUP_DIR` from `SGConfiguration.txt` |
+| `cleanup-smc-backups.sh` | Apply retention to Management Server backups from `SG_BACKUP_DIR` and Log Server backups from `LOG_BACKUP_DIR` |
 
 ## SMC backup cleanup quick start
 
@@ -33,12 +33,16 @@ After reviewing the dry-run output, edit the SMC backup task and set **Script to
 /usr/local/sbin/cleanup-smc-backups.sh
 ~~~
 
-The script automatically reads the backup path from:
+The script automatically discovers both backup locations:
 
 ~~~text
 /usr/local/forcepoint/smc/data/SGConfiguration.txt
+  -> SG_BACKUP_DIR
+
+/usr/local/forcepoint/smc/data/LogServerConfiguration.txt
+  -> LOG_BACKUP_DIR
 ~~~
 
-using its `SG_BACKUP_DIR` property.
+A value such as `LOG_BACKUP_DIR=${SG_DATA_ROOT_DIR}/backups` is safely resolved to the SMC installation root without sourcing the configuration file.
 
 For the complete installation procedure, execution-account check, retention behavior, SMC task configuration, logging, and rollback instructions, see [SMC backup cleanup](../docs/smc-backup-cleanup.md).
