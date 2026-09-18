@@ -10,16 +10,18 @@ Normal execution is destructive. Always validate the target directory and run a 
 
 The script:
 
-- reads the Management Server backup directory from `/usr/local/forcepoint/smc/data/SGConfiguration.txt` using `SG_BACKUP_DIR`, or falls back to `${SG_DATA_ROOT_DIR}/backups` when that property is absent;
-- reads the Log Server backup directory from `/usr/local/forcepoint/smc/data/LogServerConfiguration.txt` using `LOG_BACKUP_DIR`;
-- safely resolves the `SG_DATA_ROOT_DIR` token without sourcing either configuration file;
-- keeps the 5 most recent distinct automatic Log Server backup dates;
-- keeps the 5 most recent distinct automatic Management Server backup dates;
-- deletes older recognized automatic backups;
-- deletes manual/commented Management Server backups only when they are older than the oldest retained automatic Management Server backup;
-- ignores files and directories that do not match the recognized Forcepoint backup naming patterns;
-- uses `flock` to prevent overlapping cleanup executions;
-- waits 60 seconds during normal post-task execution before evaluating retention.
+- discovers Management Server and Log Server backup sources independently, so either role can be absent;
+- reads `SG_BACKUP_DIR` and `LOG_BACKUP_DIR` without sourcing Forcepoint configuration files;
+- supports an alternative SMC root with `--smc-root` or `FORCEPOINT_SMC_ROOT`;
+- falls back to `${SG_DATA_ROOT_DIR}/backups` when the relevant backup-directory property is absent;
+- keeps 5 distinct automatic SGM and SGL dates by default, with independent configurable retention;
+- separates discovery, retention planning, safety validation, and deletion;
+- refuses a run if the deletion plan exceeds the configured safety threshold;
+- waits for backup entries to reach a quiet age instead of relying on a fixed 60-second sleep;
+- uses `flock` when available and falls back to an atomic `mkdir` lock;
+- ignores unrecognized entries and symbolic links;
+- assigns a run ID to every execution and logs to stdout, syslog/journal, and optionally a file;
+- retains manual/commented SGM backups until enough automatic SGM dates exist and they are older than the retained cutoff.
 
 Retention for Log Server (`sgl`) and Management Server (`sgm`) backups is intentionally evaluated independently. A successful Log Server backup therefore cannot advance Management Server retention when the Management Server backup did not complete.
 
@@ -77,20 +79,11 @@ grep -E '^[[:space:]]*LOG_BACKUP_DIR[[:space:]]*=' \
 
 Do not copy the complete `SGConfiguration.txt` into issues, tickets, or public logs.
 
-The script fails without deleting anything if:
+Management Server and Log Server sources are evaluated independently. A missing or unusable configuration disables that source and is logged. The script stops only when **no valid source remains**.
 
-- either SMC configuration file is not readable;
-- `LOG_BACKUP_DIR` is missing or empty;
-- `SG_BACKUP_DIR` is present but empty or invalid;
-- a backup path contains an unresolved `${...}` expression other than the supported `SG_DATA_ROOT_DIR` token;
-- the configured path is not absolute;
-- the configured path is `/`;
-- the configured directory does not exist;
-- the configured directory is not readable or traversable;
-- the configured directory is not writable during a real cleanup run;
-- `flock` is unavailable.
+For a configured source, the script rejects unresolved variables, non-absolute paths, `/`, unreadable directories, and unwritable directories during a real cleanup run. A `--dry-run` does not require write access.
 
-A `--dry-run` does not require write access to the backup directory.
+Only the known `SG_DATA_ROOT_DIR` token is expanded. The configuration files are never sourced and their contents are never passed to `eval`.
 
 ## Recognized backups
 
@@ -179,6 +172,21 @@ sudo -u sgadmin sh /usr/local/sbin/forcepoint-backup-cleanup.sh \
 sudo -u sgadmin bash /usr/local/sbin/forcepoint-backup-cleanup.sh \
     --dry-run --no-wait
 ~~~
+
+## Runtime requirements on Ubuntu
+
+The target systems are expected to be Ubuntu-based. The script requires Bash 3 or newer and standard GNU userland commands such as `sort`, `stat`, `date`, `rm`, and `mkdir`.
+
+On a minimal Ubuntu installation, the relevant packages can be installed with:
+
+~~~bash
+sudo apt-get update
+sudo apt-get install -y bash coreutils util-linux
+~~~
+
+`flock` is provided by `util-linux`. It is preferred when available, but it is no longer mandatory: `--lock-method auto` falls back to an atomic `mkdir` lock.
+
+The script no longer depends on `mapfile` or associative arrays. `logger` is optional; stdout logging continues even when syslog tooling is unavailable.
 
 ## Recommended installation path
 
@@ -281,6 +289,41 @@ This verifies that the account can:
 
 Because this is a dry run, nothing is removed.
 
+## Configuration options
+
+Defaults are conservative and require no arguments from the SMC task:
+
+~~~text
+SGM retained dates:        5
+SGL retained dates:        5
+maximum planned deletions: 500
+quiet age:                 30 seconds
+quiet timeout:             180 seconds
+poll interval:             5 seconds
+lock method:               auto
+~~~
+
+Useful overrides include:
+
+~~~bash
+--smc-root /usr/local/forcepoint/smc
+--management-config /path/to/SGConfiguration.txt
+--log-config /path/to/LogServerConfiguration.txt
+--keep-dates 7
+--keep-sgm-dates 10
+--keep-sgl-dates 5
+--max-delete-count 250
+--stable-age-seconds 45
+--stability-timeout-seconds 300
+--poll-seconds 5
+--lock-method auto
+--log-file /var/log/forcepoint-backup-cleanup.log
+~~~
+
+Set `--max-delete-count 0` only when you deliberately want to disable the count threshold.
+
+`--no-wait` skips the quiet-period protection and is intended for controlled testing, especially with `--dry-run`.
+
 ## Test the retention policy
 
 Before configuring the SMC task, run:
@@ -333,20 +376,25 @@ sh /usr/local/sbin/forcepoint-backup-cleanup.sh 1>>script.out 2>>script.err
 
 The cleanup script therefore contains a small POSIX-compatible bootstrap at the top. If it was started by `sh`, it immediately re-executes itself with Bash before any Bash-only syntax such as `set -o pipefail`, `[[ ... ]]`, associative arrays, or `mapfile` is evaluated.
 
-The script itself includes the 60-second delay used for post-task execution, so the SMC configuration does not need a separate delay.
+The script performs its own quiet-period check before planning deletions, so the SMC configuration does not need a separate delay.
 
-## Why the script uses a lock and a delay
+## Concurrency and quiet-period protection
 
 A backup task containing multiple targets can cause Forcepoint to invoke the post-task script more than once.
 
-The script therefore:
+The script acquires a non-blocking lock before doing retention work. In `auto` mode it uses `flock` when available and otherwise uses an atomic `mkdir` lock with stale-PID recovery. A second overlapping invocation exits without deleting anything.
 
-1. acquires a non-blocking `flock` lock;
-2. lets only one cleanup instance continue;
-3. waits 60 seconds;
-4. evaluates retention after the other backup target has had time to finish.
+Instead of sleeping for a fixed number of seconds, the script checks the newest SGM/SGL candidate modification time and waits until it has been quiet for `--stable-age-seconds`. It aborts after `--stability-timeout-seconds` if the directories never become quiet. Before deletion, it also refuses the plan if a newer candidate appeared after the quiet-period check.
 
-A second overlapping invocation exits without deleting anything.
+## Safety model
+
+Before any deletion, the script first discovers recognized backups and builds an in-memory plan. It then validates the whole plan.
+
+The default `--max-delete-count 500` prevents an unexpectedly large cleanup from starting. The script also refuses automatic deletion if its retention invariants would leave no automatic backup, or if a deletion were planned before the requested number of distinct retained dates exists.
+
+Every delete target is validated again immediately before `rm`: it must still be a direct candidate under the resolved source directory, match the expected SGM/SGL naming form, and not be a symbolic link.
+
+Unknown filenames are counted for diagnostics but never selected for deletion.
 
 ## First production run
 
@@ -397,11 +445,15 @@ Show help:
 
 ## Logging
 
-The script writes to standard output and, when `logger` is available, uses the syslog tag:
+Every run gets an identifier such as `20260918T115629-156684`. Log lines include `run_id` and a level so overlapping or historical executions can be correlated.
+
+The script always writes to standard output. When `logger` is available it also uses the syslog tag:
 
 ~~~text
 forcepoint-backup-cleanup
 ~~~
+
+An additional file can be configured with `--log-file /absolute/path`.
 
 Useful commands:
 
@@ -810,6 +862,27 @@ sudo -u sgadmin /usr/local/sbin/forcepoint-backup-cleanup.sh \
 ~~~
 
 Do not manually remove backups until the path, retention selection, and permission problem have been understood.
+
+## Automated tests
+
+CI now exercises more than syntax and ShellCheck. The functional test suite creates temporary SMC layouts and validates:
+
+- invocation through `sh` and the Bash bootstrap;
+- Management-only and Log-only installations;
+- missing `SG_BACKUP_DIR` fallback;
+- `${SG_DATA_ROOT_DIR}` expansion;
+- identical SGM/SGL directories;
+- multiple backups on the same retained date;
+- manual/commented SGM cutoff behavior;
+- configurable retention;
+- deletion-count safety limits;
+- optional file logging and run IDs.
+
+Run the suite from a repository checkout with:
+
+~~~bash
+bash .github/scripts/test-forcepoint-backup-cleanup.sh
+~~~
 
 ## Updating the installed script
 
