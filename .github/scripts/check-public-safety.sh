@@ -14,8 +14,8 @@ if [ -e scripts ]; then
     failed=1
 fi
 
-printf '%s\n' 'Checking dist script permissions...'
-for script in dist/*.sh; do
+printf '%s\n' 'Checking script permissions...'
+for script in dist/*.sh maintenance/*.sh; do
     [ -f "$script" ] || continue
     if [ ! -x "$script" ]; then
         echo "Not executable: $script" >&2
@@ -50,7 +50,7 @@ if grep -RInE \
 fi
 
 printf '%s\n' 'Checking that dist scripts are standalone...'
-if grep -nE '(source|\.)[[:space:]]+.*(\.\./|/lib/|compat\.sh)' dist/*.sh 2>/dev/null; then
+if grep -nE '(source|\.)[[:space:]]+.*(\.\./|/lib/|compat\.sh)' dist/*.sh maintenance/*.sh 2>/dev/null; then
     echo 'A dist script appears to source another repository-local file.' >&2
     failed=1
 fi

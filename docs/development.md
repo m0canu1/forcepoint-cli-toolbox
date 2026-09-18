@@ -6,7 +6,7 @@ The toolbox is designed for operational diagnostics on firewall appliances rathe
 
 New scripts should be:
 
-- read-only by default;
+- read-only by default, with state-changing utilities isolated under `maintenance/`;
 - understandable without hidden state;
 - conservative about dependencies;
 - useful when copied as a single file;
@@ -15,11 +15,11 @@ New scripts should be:
 
 ## Canonical source
 
-`dist/` is the single source of truth for operational scripts.
+`dist/` is the source of truth for read-only operational scripts. `maintenance/` contains explicitly state-changing utilities.
 
-There is no generated distribution layer and no separate source directory. Edit `dist/*.sh` directly.
+There is no generated distribution layer and no separate source directory. Edit scripts directly in the appropriate directory.
 
-Every script must remain self-contained at runtime and must not source another repository file.
+Every script must remain self-contained at runtime and must not source another repository file. Maintenance scripts must be narrowly scoped and should expose a dry-run path when practical.
 
 ## BusyBox
 
@@ -38,20 +38,22 @@ Do not assume a BusyBox applet supports every GNU option.
 
 CI performs:
 
-- Bash syntax validation for `dist/*.sh`;
+- Bash syntax validation for `dist/*.sh` and `maintenance/*.sh`;
 - ShellCheck at error severity;
 - executable-permission checks;
 - standalone-script checks;
-- a public-safety scan for obvious secrets, sensitive file types and mutating commands.
+- a public-safety scan for obvious secrets and sensitive file types;
+- enforcement that `dist/` remains read-only.
 
 Run the same checks locally before opening a pull request:
 
 ```bash
-for script in dist/*.sh; do
+for script in dist/*.sh maintenance/*.sh; do
+    [ -f "$script" ] || continue
     bash -n "$script"
 done
 
-shellcheck -S error dist/*.sh
+shellcheck -S error dist/*.sh maintenance/*.sh
 bash .github/scripts/check-public-safety.sh
 ```
 

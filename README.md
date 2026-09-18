@@ -1,8 +1,8 @@
 # Forcepoint CLI Toolbox
 
-An unofficial collection of small, read-only Bash utilities for inventory, troubleshooting, and diagnostics on Forcepoint firewalls and their underlying Linux environment.
+An unofficial collection of small Bash utilities for inventory, troubleshooting, diagnostics, and narrowly scoped Forcepoint maintenance tasks.
 
-The project is intentionally conservative: scripts should inspect state rather than change it, avoid destructive commands, and tolerate the reduced userspace commonly found on firewall appliances.
+Read-only operational tools live in `dist/`. Scripts that intentionally modify appliance state live separately in `maintenance/` and must provide explicit safeguards and documentation.
 
 ## Recommended usage
 
@@ -24,7 +24,8 @@ When the repository is public and the appliance is allowed outbound HTTPS access
 
 ```text
 forcepoint-cli-toolbox/
-├── dist/                    # Canonical, standalone operational scripts
+├── dist/                    # Read-only standalone operational scripts
+├── maintenance/             # Explicitly mutating maintenance scripts
 ├── docs/                    # Usage, compatibility and development notes
 ├── .github/
 │   ├── scripts/             # Repository-only CI/safety helpers
@@ -83,6 +84,16 @@ Inspect the appliance runtime and BusyBox availability:
 | `check-runtime.sh` | Native/BusyBox command availability report |
 | `collect-network-diagnostics.sh` | General read-only network troubleshooting snapshot |
 
+## Maintenance tools
+
+Maintenance scripts are intentionally separated from the read-only `dist/` tools. Review them before production use and use any available dry-run mode first.
+
+| Script | Purpose |
+| --- | --- |
+| `maintenance/cleanup-smc-backups.sh` | Retain the 5 most recent automatic SMC backup dates and remove older automatic/manual SMC backups using `SG_BACKUP_DIR` from `SGConfiguration.txt` |
+
+See [maintenance/README.md](maintenance/README.md) for installation and Forcepoint post-task configuration.
+
 ## BusyBox and reduced userspaces
 
 Forcepoint appliances may expose a smaller Linux environment than a general-purpose distribution. BusyBox is commonly present. Scripts should prefer normal commands when available and use BusyBox or `/proc`/`/sys` fallbacks where practical.
@@ -91,9 +102,9 @@ Run `dist/check-runtime.sh` on a target appliance to see which commands are nati
 
 ## Development
 
-`dist/` is both the canonical source and deployment surface. Edit scripts directly in `dist/`; each script must remain self-contained and safe to copy by itself to an appliance.
+`dist/` contains the canonical read-only operational scripts. Explicitly mutating utilities belong in `maintenance/`. Scripts in both locations must remain self-contained and safe to copy individually to an appliance.
 
-CI validates Bash syntax, ShellCheck errors, executable permissions, standalone behavior and the repository's read-only/public-safety policy.
+CI validates Bash syntax, ShellCheck errors, executable permissions, standalone behavior, and keeps the read-only policy enforced for `dist/`.
 
 See [docs/development.md](docs/development.md).
 
@@ -105,7 +116,7 @@ Do not commit customer data, credentials, tokens, PSKs, private keys, certificat
 
 ## Safety policy
 
-Scripts in `dist/` are expected to be read-only. They must not change routes, interfaces, firewall policy, VPN configuration, services, kernel parameters or system files.
+Scripts in `dist/` are expected to be read-only. They must not change routes, interfaces, firewall policy, VPN configuration, services, kernel parameters or system files. Scripts in `maintenance/` may intentionally modify state, but must be narrowly scoped, documented, and include safety checks appropriate to the operation.
 
 ## License
 

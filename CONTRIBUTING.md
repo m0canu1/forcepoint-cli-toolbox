@@ -4,7 +4,8 @@ Contributions should keep the toolbox predictable, portable and safe for operati
 
 ## Core principles
 
-- Prefer read-only inspection commands.
+- Keep scripts in `dist/` read-only.
+- Put intentional state-changing operations only in `maintenance/`, with clear scope, safeguards, and documentation.
 - Do not change firewall, routing, VPN, interface, service, kernel or system configuration from scripts in `dist/`.
 - Keep runtime dependencies small and detect optional commands before using them.
 - Assume some Forcepoint appliances expose a reduced Linux userspace.
@@ -14,13 +15,13 @@ Contributions should keep the toolbox predictable, portable and safe for operati
 - Quote shell variables and keep scripts compatible with Bash.
 - Never commit credentials, tokens, keys, PSKs, certificates, packet captures, support bundles, customer data, internal addressing plans or production-specific values.
 
-## Canonical script location
+## Canonical script locations
 
-All operational scripts live directly under `dist/`.
+Read-only operational scripts live directly under `dist/`. Explicitly mutating maintenance scripts live under `maintenance/`.
 
-Edit `dist/*.sh` directly. There is no generated copy and no separate source tree.
+Edit scripts directly in those directories. There is no generated copy and no separate source tree.
 
-Every script in `dist/` must be self-contained so it can be copied individually to a firewall and executed without any other repository file.
+Every script must be self-contained so it can be copied individually to an appliance and executed without any other repository file. Maintenance scripts must document exactly what they can modify or delete and should provide a dry-run mode when practical.
 
 ## Naming
 
@@ -37,7 +38,8 @@ collect-network-diagnostics.sh
 Before committing:
 
 ```bash
-for script in dist/*.sh; do
+for script in dist/*.sh maintenance/*.sh; do
+    [ -f "$script" ] || continue
     bash -n "$script"
 done
 
@@ -47,7 +49,7 @@ bash .github/scripts/check-public-safety.sh
 If ShellCheck is available:
 
 ```bash
-shellcheck -S error dist/*.sh
+shellcheck -S error dist/*.sh maintenance/*.sh
 ```
 
 GitHub Actions runs the same classes of checks automatically.
