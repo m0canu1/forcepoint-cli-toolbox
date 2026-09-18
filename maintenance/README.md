@@ -46,3 +46,5 @@ The script automatically discovers both backup locations:
 A value such as `LOG_BACKUP_DIR=${SG_DATA_ROOT_DIR}/backups` is safely resolved to the SMC installation root without sourcing the configuration file.
 
 For the complete installation procedure, execution-account check, retention behavior, SMC task configuration, logging, troubleshooting, and rollback instructions, see [Forcepoint backup cleanup](../docs/forcepoint-backup-cleanup.md).
+Observed compatibility note: SMC 7.3.4 can invoke the configured post-task script explicitly through `sh`, while a tested 7.4.1 installation did not show the same incompatibility. The current script includes a shell bootstrap that re-executes under Bash when necessary. See the full compatibility and troubleshooting notes in the main cleanup documentation.
+
