@@ -4,16 +4,22 @@ set -euo pipefail
 
 # Forcepoint SMC backup retention cleanup.
 #
-# This script is intended for the SMC "Script to Execute After the Task"
-# hook. It reads the configured backup directory from SGConfiguration.txt
-# instead of hard-coding a path.
+# Intended for the SMC "Script to Execute After the Task" hook.
 #
-# Retention is evaluated independently for Log Server (sgl) and Management
-# Server (sgm) automatic backups. Manual/commented SGM backups are deleted
-# only after at least KEEP_DATES automatic SGM dates exist, and only when
-# they are older than the oldest retained automatic SGM date.
+# Management Server backups (sgm) and Log Server backups (sgl) are stored in
+# different locations and are therefore discovered independently:
+#
+#   SGConfiguration.txt          -> SG_BACKUP_DIR
+#   LogServerConfiguration.txt   -> LOG_BACKUP_DIR
+#
+# Retention is evaluated independently for SGM and SGL backups.
+# Manual/commented SGM backups are deleted only after at least KEEP_DATES
+# automatic SGM dates exist, and only when they are older than the oldest
+# retained automatic SGM date.
 
-CONFIG_FILE="/usr/local/forcepoint/smc/data/SGConfiguration.txt"
+MGT_CONFIG_FILE="/usr/local/forcepoint/smc/data/SGConfiguration.txt"
+LOG_CONFIG_FILE="/usr/local/forcepoint/smc/data/LogServerConfiguration.txt"
+
 KEEP_DATES=5
 WAIT_SECONDS=60
 LOG_TAG="forcepoint-backup-cleanup"
@@ -54,58 +60,88 @@ die()
     exit 1
 }
 
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --dry-run)
-            DRY_RUN=true
+trim_value()
+{
+    local value="$1"
+
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+
+    case "$value" in
+        \"*\")
+            value="${value#\"}"
+            value="${value%\"}"
             ;;
-        --no-wait)
-            SKIP_WAIT=true
-            ;;
-        --help|-h)
-            usage
-            exit 0
-            ;;
-        *)
-            usage >&2
-            die "Unknown argument: $1"
+        \'*\')
+            value="${value#\'}"
+            value="${value%\'}"
             ;;
     esac
-    shift
-done
 
-read_backup_dir()
+    printf '%s\n' "$value"
+}
+
+read_config_value()
 {
+    local file="$1"
+    local key="$2"
     local line
     local value=""
+
+    [[ -r "$file" ]] || return 1
 
     while IFS= read -r line || [[ -n "$line" ]]; do
         line="${line%$'\r'}"
 
-        if [[ "$line" =~ ^[[:space:]]*SG_BACKUP_DIR[[:space:]]*=(.*)$ ]]; then
-            value="${BASH_REMATCH[1]}"
-
-            # Trim leading and trailing whitespace without evaluating the value.
-            value="${value#"${value%%[![:space:]]*}"}"
-            value="${value%"${value##*[![:space:]]}"}"
-
-            # Accept a fully quoted path while still treating the configuration
-            # as data rather than sourcing it as shell code.
-            case "$value" in
-                \"*\")
-                    value="${value#\"}"
-                    value="${value%\"}"
-                    ;;
-                \'*\')
-                    value="${value#\'}"
-                    value="${value%\'}"
-                    ;;
-            esac
+        if [[ "$line" =~ ^[[:space:]]*$key[[:space:]]*=(.*)$ ]]; then
+            value="$(trim_value "${BASH_REMATCH[1]}")"
         fi
-    done < "$CONFIG_FILE"
+    done < "$file"
 
     [[ -n "$value" ]] || return 1
     printf '%s\n' "$value"
+}
+
+resolve_backup_dir()
+{
+    local file="$1"
+    local key="$2"
+    local raw
+    local data_root_token='${SG_DATA_ROOT_DIR}'
+
+    raw="$(read_config_value "$file" "$key")" || return 1
+
+    raw="${raw//$data_root_token/$SMC_DATA_ROOT_DIR}"
+
+    [[ "$raw" != *'${'* ]] || return 2
+    [[ "$raw" == /* ]] || return 3
+    [[ "$raw" != "/" ]] || return 4
+
+    if [[ "$raw" != "/" ]]; then
+        raw="${raw%/}"
+    fi
+
+    printf '%s\n' "$raw"
+}
+
+validate_backup_dir()
+{
+    local label="$1"
+    local path="$2"
+
+    [[ -d "$path" ]] ||
+        die "$label backup directory does not exist: $path"
+
+    [[ -r "$path" ]] ||
+        die "$label backup directory is not readable: $path"
+
+    [[ -x "$path" ]] ||
+        die "$label backup directory is not traversable: $path"
+
+    if [[ "$DRY_RUN" != true ]]; then
+        [[ -w "$path" ]] ||
+            die "$label backup directory is not writable: $path"
+    fi
 }
 
 get_sgl_automatic_date()
@@ -113,8 +149,11 @@ get_sgl_automatic_date()
     local path="$1"
     local name="${path##*/}"
 
+    # Supported examples:
+    # sgl_v7.4.1.12025_20260915_070000_no_logs_zip
+    # sgl_v7.3.1.11715_20260201_230000_Backup giornaliero no Log Files_no_logs_zip
     if [[ -d "$path" &&
-          "$name" =~ ^sgl_.*_([0-9]{8})_[0-9]{6}_no_logs_zip$ ]]; then
+          "$name" =~ ^sgl_.*_([0-9]{8})_[0-9]{6}(_.*)?_no_logs_zip$ ]]; then
         printf '%s\n' "${BASH_REMATCH[1]}"
         return 0
     fi
@@ -188,33 +227,43 @@ delete_file()
     return 1
 }
 
-[[ -r "$CONFIG_FILE" ]] || die "Configuration file is not readable: $CONFIG_FILE"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        --no-wait)
+            SKIP_WAIT=true
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            die "Unknown argument: $1"
+            ;;
+    esac
+    shift
+done
 
-BACKUP_DIR="$(read_backup_dir)" ||
-    die "SG_BACKUP_DIR was not found or is empty in $CONFIG_FILE"
+[[ -r "$MGT_CONFIG_FILE" ]] ||
+    die "Management Server configuration file is not readable: $MGT_CONFIG_FILE"
 
-[[ "$BACKUP_DIR" != *'\${'* ]] ||
-    die "SG_BACKUP_DIR contains an unresolved variable expression: $BACKUP_DIR"
+[[ -r "$LOG_CONFIG_FILE" ]] ||
+    die "Log Server configuration file is not readable: $LOG_CONFIG_FILE"
 
-[[ "$BACKUP_DIR" == /* ]] ||
-    die "SG_BACKUP_DIR must be an absolute path: $BACKUP_DIR"
+SMC_DATA_ROOT_DIR="$(cd -- "$(dirname -- "$MGT_CONFIG_FILE")/.." && pwd -P)" ||
+    die "Could not determine SG_DATA_ROOT_DIR"
 
-[[ "$BACKUP_DIR" != "/" ]] ||
-    die "Refusing to use / as SG_BACKUP_DIR"
+MGT_BACKUP_DIR="$(resolve_backup_dir "$MGT_CONFIG_FILE" "SG_BACKUP_DIR")" ||
+    die "Could not safely resolve SG_BACKUP_DIR from $MGT_CONFIG_FILE"
 
-[[ -d "$BACKUP_DIR" ]] ||
-    die "Configured backup directory does not exist: $BACKUP_DIR"
+LOG_BACKUP_DIR="$(resolve_backup_dir "$LOG_CONFIG_FILE" "LOG_BACKUP_DIR")" ||
+    die "Could not safely resolve LOG_BACKUP_DIR from $LOG_CONFIG_FILE"
 
-[[ -r "$BACKUP_DIR" ]] ||
-    die "Configured backup directory is not readable: $BACKUP_DIR"
-
-[[ -x "$BACKUP_DIR" ]] ||
-    die "Configured backup directory is not traversable: $BACKUP_DIR"
-
-if [[ "$DRY_RUN" != true ]]; then
-    [[ -w "$BACKUP_DIR" ]] ||
-        die "Configured backup directory is not writable: $BACKUP_DIR"
-fi
+validate_backup_dir "Management Server" "$MGT_BACKUP_DIR"
+validate_backup_dir "Log Server" "$LOG_BACKUP_DIR"
 
 command -v flock >/dev/null 2>&1 ||
     die "flock is required but was not found"
@@ -226,7 +275,8 @@ if ! flock -n 9; then
     exit 0
 fi
 
-log "Using SG_BACKUP_DIR from $CONFIG_FILE: $BACKUP_DIR"
+log "Using SGM backup directory from $MGT_CONFIG_FILE: $MGT_BACKUP_DIR"
+log "Using SGL backup directory from $LOG_CONFIG_FILE: $LOG_BACKUP_DIR"
 
 if [[ "$DRY_RUN" == true ]]; then
     log "DRY RUN enabled. No files or directories will be deleted."
@@ -242,12 +292,13 @@ shopt -s nullglob
 declare -A sgl_dates=()
 declare -A sgm_dates=()
 
-for path in "$BACKUP_DIR"/*; do
+for path in "$LOG_BACKUP_DIR"/*; do
     if backup_date="$(get_sgl_automatic_date "$path")"; then
         sgl_dates["$backup_date"]=1
-        continue
     fi
+done
 
+for path in "$MGT_BACKUP_DIR"/*; do
     if backup_date="$(get_sgm_automatic_date "$path")"; then
         sgm_dates["$backup_date"]=1
     fi
@@ -258,23 +309,23 @@ if [[ ${#sgl_dates[@]} -eq 0 && ${#sgm_dates[@]} -eq 0 ]]; then
     exit 0
 fi
 
+sorted_sgl_dates=()
+sorted_sgm_dates=()
 keep_sgl_dates=()
 keep_sgm_dates=()
 
 if [[ ${#sgl_dates[@]} -gt 0 ]]; then
-    mapfile -t keep_sgl_dates < <(
-        printf '%s\n' "${!sgl_dates[@]}" |
-            sort -r |
-            head -n "$KEEP_DATES"
+    mapfile -t sorted_sgl_dates < <(
+        printf '%s\n' "${!sgl_dates[@]}" | sort -r
     )
+    keep_sgl_dates=("${sorted_sgl_dates[@]:0:$KEEP_DATES}")
 fi
 
 if [[ ${#sgm_dates[@]} -gt 0 ]]; then
-    mapfile -t keep_sgm_dates < <(
-        printf '%s\n' "${!sgm_dates[@]}" |
-            sort -r |
-            head -n "$KEEP_DATES"
+    mapfile -t sorted_sgm_dates < <(
+        printf '%s\n' "${!sgm_dates[@]}" | sort -r
     )
+    keep_sgm_dates=("${sorted_sgm_dates[@]:0:$KEEP_DATES}")
 fi
 
 declare -A keep_sgl=()
@@ -290,10 +341,14 @@ done
 
 if [[ ${#keep_sgl_dates[@]} -gt 0 ]]; then
     log "Keeping SGL automatic backup dates: ${keep_sgl_dates[*]}"
+else
+    log "No recognized SGL automatic backups found in $LOG_BACKUP_DIR"
 fi
 
 if [[ ${#keep_sgm_dates[@]} -gt 0 ]]; then
     log "Keeping SGM automatic backup dates: ${keep_sgm_dates[*]}"
+else
+    log "No recognized SGM automatic backups found in $MGT_BACKUP_DIR"
 fi
 
 manual_cleanup_enabled=false
@@ -315,7 +370,7 @@ manual_kept=0
 manual_selected=0
 errors=0
 
-for path in "$BACKUP_DIR"/*; do
+for path in "$LOG_BACKUP_DIR"/*; do
     if ! backup_date="$(get_sgl_automatic_date "$path")"; then
         continue
     fi
@@ -333,7 +388,7 @@ for path in "$BACKUP_DIR"/*; do
     fi
 done
 
-for path in "$BACKUP_DIR"/*; do
+for path in "$MGT_BACKUP_DIR"/*; do
     if ! backup_date="$(get_sgm_automatic_date "$path")"; then
         continue
     fi
@@ -352,7 +407,7 @@ for path in "$BACKUP_DIR"/*; do
 done
 
 if [[ "$manual_cleanup_enabled" == true ]]; then
-    for path in "$BACKUP_DIR"/*; do
+    for path in "$MGT_BACKUP_DIR"/*; do
         if ! backup_date="$(get_sgm_manual_date "$path")"; then
             continue
         fi
