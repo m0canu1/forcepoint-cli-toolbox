@@ -102,6 +102,23 @@ read_config_value()
     printf '%s\n' "$value"
 }
 
+config_key_exists()
+{
+    local file="$1"
+    local key="$2"
+    local line
+
+    [[ -r "$file" ]] || return 1
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^[[:space:]]*${key}[[:space:]]*= ]]; then
+            return 0
+        fi
+    done < "$file"
+
+    return 1
+}
+
 resolve_backup_dir()
 {
     local file="$1"
@@ -256,8 +273,16 @@ done
 SMC_DATA_ROOT_DIR="$(cd -- "$(dirname -- "$MGT_CONFIG_FILE")/.." && pwd -P)" ||
     die "Could not determine SG_DATA_ROOT_DIR"
 
-MGT_BACKUP_DIR="$(resolve_backup_dir "$MGT_CONFIG_FILE" "SG_BACKUP_DIR")" ||
-    die "Could not safely resolve SG_BACKUP_DIR from $MGT_CONFIG_FILE"
+DEFAULT_BACKUP_DIR="${SMC_DATA_ROOT_DIR}/backups"
+MGT_BACKUP_DIR_DEFAULTED=false
+
+if config_key_exists "$MGT_CONFIG_FILE" "SG_BACKUP_DIR"; then
+    MGT_BACKUP_DIR="$(resolve_backup_dir "$MGT_CONFIG_FILE" "SG_BACKUP_DIR")" ||
+        die "Could not safely resolve SG_BACKUP_DIR from $MGT_CONFIG_FILE"
+else
+    MGT_BACKUP_DIR="$DEFAULT_BACKUP_DIR"
+    MGT_BACKUP_DIR_DEFAULTED=true
+fi
 
 LOG_BACKUP_DIR="$(resolve_backup_dir "$LOG_CONFIG_FILE" "LOG_BACKUP_DIR")" ||
     die "Could not safely resolve LOG_BACKUP_DIR from $LOG_CONFIG_FILE"
@@ -275,7 +300,12 @@ if ! flock -n 9; then
     exit 0
 fi
 
-log "Using SGM backup directory from $MGT_CONFIG_FILE: $MGT_BACKUP_DIR"
+if [[ "$MGT_BACKUP_DIR_DEFAULTED" == true ]]; then
+    log "SG_BACKUP_DIR not found in $MGT_CONFIG_FILE; using default SGM backup directory: $MGT_BACKUP_DIR"
+else
+    log "Using SGM backup directory from $MGT_CONFIG_FILE: $MGT_BACKUP_DIR"
+fi
+
 log "Using SGL backup directory from $LOG_CONFIG_FILE: $LOG_BACKUP_DIR"
 
 if [[ "$DRY_RUN" == true ]]; then
