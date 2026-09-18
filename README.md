@@ -96,7 +96,7 @@ Preview SMC backup retention without deleting anything:
 
 | Script | Purpose |
 | --- | --- |
-| `cleanup-smc-backups.sh` | Retain the newest SMC backup dates and remove older automatic/manual backup archives using `SG_BACKUP_DIR` from `SGConfiguration.txt` |
+| `cleanup-smc-backups.sh` | Retain the newest Management Server and Log Server backup dates using their respective SMC configuration paths |
 
 Maintenance scripts are documented separately because they can modify or delete data. See [maintenance/README.md](maintenance/README.md).
 
