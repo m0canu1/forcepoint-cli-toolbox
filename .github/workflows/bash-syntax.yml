@@ -31,7 +31,7 @@ jobs:
             echo "Checking syntax: $script"
             bash -n "$script"
           done
-          [ "$found" -eq 1 ] || { echo 'No shell scripts found.' >&2; exit 1; }
+          [ "$found" -eq 1 ] || { echo 'No operational scripts found.' >&2; exit 1; }
 
       - name: ShellCheck
         shell: bash

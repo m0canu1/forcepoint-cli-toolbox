@@ -4,9 +4,10 @@ Contributions should keep the toolbox predictable, portable and safe for operati
 
 ## Core principles
 
-- Keep scripts in `dist/` read-only.
-- Put intentional state-changing operations only in `maintenance/`, with clear scope, safeguards, and documentation.
+- Prefer read-only inspection commands for diagnostic tooling.
 - Do not change firewall, routing, VPN, interface, service, kernel or system configuration from scripts in `dist/`.
+- Put intentionally mutating or destructive operational utilities in `maintenance/`, not `dist/`.
+- Maintenance scripts must validate their target paths, document their effects and provide a dry-run or equivalent preview mode when practical.
 - Keep runtime dependencies small and detect optional commands before using them.
 - Assume some Forcepoint appliances expose a reduced Linux userspace.
 - Prefer native commands when present and use BusyBox or `/proc`/`/sys` fallbacks where practical.
@@ -15,13 +16,13 @@ Contributions should keep the toolbox predictable, portable and safe for operati
 - Quote shell variables and keep scripts compatible with Bash.
 - Never commit credentials, tokens, keys, PSKs, certificates, packet captures, support bundles, customer data, internal addressing plans or production-specific values.
 
-## Canonical script locations
+## Script locations
 
-Read-only operational scripts live directly under `dist/`. Explicitly mutating maintenance scripts live under `maintenance/`.
+Read-only diagnostic scripts live directly under `dist/`.
 
-Edit scripts directly in those directories. There is no generated copy and no separate source tree.
+Maintenance scripts that intentionally modify or delete data live under `maintenance/`.
 
-Every script must be self-contained so it can be copied individually to an appliance and executed without any other repository file. Maintenance scripts must document exactly what they can modify or delete and should provide a dry-run mode when practical.
+There is no generated copy and no separate source tree. Every operational script must remain self-contained so it can be copied individually to a target Forcepoint system and executed without any other repository file.
 
 ## Naming
 
@@ -31,6 +32,7 @@ Use lowercase descriptive filenames such as:
 get-routes.sh
 get-interface-counters.sh
 collect-network-diagnostics.sh
+cleanup-smc-backups.sh
 ```
 
 ## Validation
@@ -54,8 +56,12 @@ shellcheck -S error dist/*.sh maintenance/*.sh
 
 GitHub Actions runs the same classes of checks automatically.
 
+The public-safety mutation scan intentionally applies to `dist/`; scripts in `maintenance/` are reviewed as explicitly mutating tools instead.
+
 ## Documentation
 
 Document purpose, arguments, limitations and example usage. Examples must use sanitized or documentation-reserved values rather than customer or production information.
+
+For maintenance scripts, also document what can be modified or deleted, how target paths are discovered or validated, and how to perform a non-destructive test.
 
 When reporting appliance compatibility, include the Forcepoint product/version and sanitized output from `dist/check-runtime.sh` when possible.

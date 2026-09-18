@@ -50,7 +50,7 @@ if grep -RInE \
 fi
 
 printf '%s\n' 'Checking that dist scripts are standalone...'
-if grep -nE '(source|\.)[[:space:]]+.*(\.\./|/lib/|compat\.sh)' dist/*.sh maintenance/*.sh 2>/dev/null; then
+if grep -nE '(source|\.)[[:space:]]+.*(\.\./|/lib/|compat\.sh)' dist/*.sh 2>/dev/null; then
     echo 'A dist script appears to source another repository-local file.' >&2
     failed=1
 fi

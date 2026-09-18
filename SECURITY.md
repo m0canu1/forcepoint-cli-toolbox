@@ -10,9 +10,9 @@ If private reporting is unavailable, open a minimal issue asking the maintainer 
 
 ## Operational safety
 
-The scripts in `dist/` are intended to be read-only diagnostic tools. Scripts under `maintenance/` intentionally modify state and can delete data; review their documented scope and run a dry-run mode first when one is available.
+The scripts in `dist/` are intended to be read-only diagnostic tools. Scripts under `maintenance/` intentionally modify state and can delete data; review their documented scope and use a dry-run or equivalent preview first when available.
 
-Review every script before running it on a production appliance, especially after downloading it from the network. Prefer copying scripts from a trusted admin workstation rather than piping remote content directly into a shell.
+Review a script before running it on a production appliance, especially after downloading it from the network. Prefer copying scripts from a trusted admin workstation rather than piping remote content directly into a shell.
 
 ## Diagnostic output
 
