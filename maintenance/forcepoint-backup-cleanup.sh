@@ -12,7 +12,12 @@ if [ -z "${BASH_VERSION:-}" ]; then
     exit 1
 fi
 
-set -euo pipefail
+set -Eeuo pipefail
+
+if (( BASH_VERSINFO[0] < 3 )); then
+    echo "ERROR: Bash 3 or newer is required." >&2
+    exit 1
+fi
 
 # Forcepoint SMC backup retention cleanup.
 #
@@ -29,48 +34,118 @@ set -euo pipefail
 # automatic SGM dates exist, and only when they are older than the oldest
 # retained automatic SGM date.
 
-MGT_CONFIG_FILE="/usr/local/forcepoint/smc/data/SGConfiguration.txt"
-LOG_CONFIG_FILE="/usr/local/forcepoint/smc/data/LogServerConfiguration.txt"
+SCRIPT_NAME="${0##*/}"
+DEFAULT_SMC_ROOT="/usr/local/forcepoint/smc"
+SMC_ROOT="${FORCEPOINT_SMC_ROOT:-$DEFAULT_SMC_ROOT}"
 
-KEEP_DATES=5
-WAIT_SECONDS=60
+MGT_CONFIG_OVERRIDE=""
+LOG_CONFIG_OVERRIDE=""
+
+KEEP_SGM_DATES=5
+KEEP_SGL_DATES=5
+MAX_DELETE_COUNT=500
+STABLE_AGE_SECONDS=30
+STABILITY_TIMEOUT_SECONDS=180
+POLL_SECONDS=5
+
 LOG_TAG="forcepoint-backup-cleanup"
-LOCK_FILE="/tmp/forcepoint-backup-cleanup-${UID}.lock"
+LOG_FILE=""
+LOCK_METHOD="auto"
+LOCK_FILE=""
+LOCK_DIR=""
+LOCK_ACTIVE=""
 
 DRY_RUN=false
 SKIP_WAIT=false
+RUN_ID="startup-$"
+
+MGT_CONFIG_FILE=""
+LOG_CONFIG_FILE=""
+MGT_ENABLED=false
+LOG_ENABLED=false
+MGT_BACKUP_DIR=""
+LOG_BACKUP_DIR=""
+MGT_BACKUP_DIR_DEFAULTED=false
+LOG_BACKUP_DIR_DEFAULTED=false
 
 usage()
 {
     cat <<'EOF'
-Usage: forcepoint-backup-cleanup.sh [--dry-run] [--no-wait] [--help]
+Usage: forcepoint-backup-cleanup.sh [options]
 
 Options:
-  --dry-run   Show what would be deleted without deleting anything.
-  --no-wait   Skip the normal post-task delay. Useful for manual testing.
-  --help      Show this help text.
+  --dry-run                         Show the plan without deleting anything.
+  --no-wait                         Skip the quiet-period wait. Intended for testing.
+  --smc-root PATH                   SMC root. Default: /usr/local/forcepoint/smc
+  --management-config FILE          Override SGConfiguration.txt path.
+  --log-config FILE                 Override LogServerConfiguration.txt path.
+  --keep-dates N                    Set both SGM and SGL retained distinct dates.
+  --keep-sgm-dates N                Retained distinct Management Server dates.
+  --keep-sgl-dates N                Retained distinct Log Server dates.
+  --max-delete-count N              Refuse a run planning more than N deletions.
+                                     0 disables this threshold. Default: 500.
+  --stable-age-seconds N            Quiet age required for newest backup entry.
+                                     Default: 30.
+  --stability-timeout-seconds N     Maximum wait for the quiet condition.
+                                     Default: 180.
+  --poll-seconds N                  Quiet-condition polling interval. Default: 5.
+  --lock-method auto|flock|mkdir    Lock implementation. Default: auto.
+  --log-file FILE                   Also append script logs to FILE.
+  --help                            Show this help text.
 
-Default behavior is destructive: recognized backups outside the retention
-window are deleted.
+Environment:
+  FORCEPOINT_SMC_ROOT               Alternative default for --smc-root.
+
+Normal execution is destructive. Use --dry-run before enabling scheduled use.
 EOF
 }
 
 log()
 {
+    local level="$1"
+    shift
     local message="$*"
+    local line
+
+    line="$(date '+%Y-%m-%d %H:%M:%S') - run_id=$RUN_ID level=$level - $message"
+    printf '%s\n' "$line"
 
     if command -v logger >/dev/null 2>&1; then
-        logger -t "$LOG_TAG" "$message" 2>/dev/null || true
+        logger -t "$LOG_TAG" "$line" 2>/dev/null || true
     fi
 
-    printf '%s - %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$message"
+    if [[ -n "$LOG_FILE" ]]; then
+        printf '%s\n' "$line" >> "$LOG_FILE" 2>/dev/null || true
+    fi
 }
 
 die()
 {
-    log "ERROR: $*"
+    log ERROR "$*"
     exit 1
 }
+
+cleanup_lock()
+{
+    if [[ "$LOCK_ACTIVE" == "mkdir" && -n "$LOCK_DIR" && -d "$LOCK_DIR" ]]; then
+        rm -f -- "$LOCK_DIR/pid" 2>/dev/null || true
+        rmdir -- "$LOCK_DIR" 2>/dev/null || true
+    fi
+}
+
+on_error()
+{
+    local status="$1"
+    local line="$2"
+    local command="$3"
+
+    trap - ERR
+    log ERROR "unexpected_failure exit_code=$status line=$line command=$command"
+    exit "$status"
+}
+
+trap cleanup_lock EXIT
+trap 'on_error "$?" "$LINENO" "$BASH_COMMAND"' ERR
 
 trim_value()
 {
