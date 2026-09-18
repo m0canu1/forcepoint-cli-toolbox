@@ -10,7 +10,9 @@ Normal execution is destructive. Always validate the target directory and run a 
 
 The script:
 
-- reads the SMC backup directory from `/usr/local/forcepoint/smc/data/SGConfiguration.txt`;
+- reads the Management Server backup directory from `/usr/local/forcepoint/smc/data/SGConfiguration.txt` using `SG_BACKUP_DIR`;
+- reads the Log Server backup directory from `/usr/local/forcepoint/smc/data/LogServerConfiguration.txt` using `LOG_BACKUP_DIR`;
+- safely resolves the `SG_DATA_ROOT_DIR` token without sourcing either configuration file;
 - keeps the 5 most recent distinct automatic Log Server backup dates;
 - keeps the 5 most recent distinct automatic Management Server backup dates;
 - deletes older recognized automatic backups;
@@ -23,42 +25,49 @@ Retention for Log Server (`sgl`) and Management Server (`sgm`) backups is intent
 
 ## Backup directory discovery
 
-The backup path is not hard-coded.
+The Management Server and Log Server backup paths are discovered independently.
 
-The script reads:
+Management Server configuration:
 
 ~~~text
 /usr/local/forcepoint/smc/data/SGConfiguration.txt
-~~~
-
-and extracts only the `SG_BACKUP_DIR` property, for example:
-
-~~~text
 SG_BACKUP_DIR=/mnt/win_share/Backup
 ~~~
 
-or:
+Log Server configuration:
 
 ~~~text
-SG_BACKUP_DIR=/usr/local/forcepoint/smc/backups
+/usr/local/forcepoint/smc/data/LogServerConfiguration.txt
+LOG_BACKUP_DIR=${SG_DATA_ROOT_DIR}/backups
 ~~~
 
-The configuration file is **not sourced or evaluated as shell code**. The script parses only the `SG_BACKUP_DIR` line because the file contains many unrelated SMC settings and can contain sensitive values.
+The `SG_DATA_ROOT_DIR` token is resolved from the SMC installation root. With the standard installation path this becomes:
 
-You can verify the configured backup path with:
+~~~text
+/usr/local/forcepoint/smc/backups
+~~~
+
+The configuration files are **not sourced or evaluated as shell code**. Only the required properties are parsed.
+
+You can verify both values with:
 
 ~~~bash
 grep -E '^[[:space:]]*SG_BACKUP_DIR[[:space:]]*=' \
     /usr/local/forcepoint/smc/data/SGConfiguration.txt
+
+grep -E '^[[:space:]]*LOG_BACKUP_DIR[[:space:]]*=' \
+    /usr/local/forcepoint/smc/data/LogServerConfiguration.txt
 ~~~
+
+`ARCHIVE_DIR_1` is not used for backup retention; it is a log archive location, not the Log Server backup directory.
 
 Do not copy the complete `SGConfiguration.txt` into issues, tickets, or public logs.
 
 The script fails without deleting anything if:
 
-- `SGConfiguration.txt` is not readable;
-- `SG_BACKUP_DIR` is missing or empty;
-- `SG_BACKUP_DIR` contains an unresolved `${...}` expression;
+- either SMC configuration file is not readable;
+- `SG_BACKUP_DIR` or `LOG_BACKUP_DIR` is missing or empty;
+- a backup path contains an unresolved `${...}` expression other than the supported `SG_DATA_ROOT_DIR` token;
 - the configured path is not absolute;
 - the configured path is `/`;
 - the configured directory does not exist;
@@ -75,10 +84,10 @@ A `--dry-run` does not require write access to the backup directory.
 Recognized form:
 
 ~~~text
-sgl_v7.4.1.12025_20260915_070000_no_logs_zip
+sgl_v7.3.1.11715_20260201_230000_Backup giornaliero no Log Files_no_logs_zip
 ~~~
 
-These are directories. The script keeps the five most recent distinct SGL backup dates and removes older recognized SGL backup directories.
+These are directories stored under the resolved `LOG_BACKUP_DIR`. The script accepts both names without a description and names containing a description between the timestamp and `_no_logs_zip`. It keeps the five most recent distinct SGL backup dates and removes older recognized SGL backup directories.
 
 ### Management Server automatic backups
 
@@ -206,10 +215,11 @@ sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
 
 This verifies that the account can:
 
-1. read `SGConfiguration.txt`;
+1. read both `SGConfiguration.txt` and `LogServerConfiguration.txt`;
 2. discover `SG_BACKUP_DIR`;
-3. enumerate the backup directory;
-4. identify which backups would be kept or deleted.
+3. resolve `LOG_BACKUP_DIR`;
+4. enumerate both backup directories;
+5. identify which SGM and SGL backups would be kept or deleted.
 
 Because this is a dry run, nothing is removed.
 
@@ -225,11 +235,12 @@ sudo -u sgadmin /usr/local/sbin/cleanup-smc-backups.sh \
 Typical output includes lines similar to:
 
 ~~~text
-Using SG_BACKUP_DIR from /usr/local/forcepoint/smc/data/SGConfiguration.txt: /mnt/win_share/Backup
+Using SGM backup directory from /usr/local/forcepoint/smc/data/SGConfiguration.txt: /mnt/win_share/Backup
+Using SGL backup directory from /usr/local/forcepoint/smc/data/LogServerConfiguration.txt: /usr/local/forcepoint/smc/backups
 DRY RUN enabled. No files or directories will be deleted.
 Keeping SGL automatic backup dates: 20260918 20260917 20260916 20260915 20260914
 Keeping SGM automatic backup dates: 20260918 20260917 20260916 20260915 20260914
-WOULD DELETE SGL AUTOMATIC: /mnt/win_share/Backup/sgl_..._20260913_070000_no_logs_zip
+WOULD DELETE SGL AUTOMATIC: /usr/local/forcepoint/smc/backups/sgl_..._20260913_230000_Backup giornaliero no Log Files_no_logs_zip
 WOULD DELETE SGM AUTOMATIC: /mnt/win_share/Backup/sgm_..._20260913_070000.zip
 ~~~
 
@@ -281,7 +292,7 @@ journalctl -t forcepoint-backup-cleanup -f
 
 Then trigger the backup task.
 
-After it completes, verify the retained backups in the configured `SG_BACKUP_DIR`.
+After it completes, verify the retained backups in both the configured Management Server backup directory and the resolved Log Server backup directory.
 
 The expected result is:
 
@@ -371,4 +382,4 @@ The filename matching is intentionally strict. Files and directories that do not
 
 If a future Forcepoint SMC release changes backup naming, review and update the matching expressions before relying on cleanup for the new format.
 
-The cleanup operates only on entries directly inside `SG_BACKUP_DIR`; it does not recursively search unrelated directory trees for backup names.
+The cleanup operates only on entries directly inside the resolved Management Server and Log Server backup directories; it does not recursively search unrelated directory trees for backup names.
