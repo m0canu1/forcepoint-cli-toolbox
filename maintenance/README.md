@@ -8,7 +8,7 @@ Unlike the diagnostic scripts in `dist/`, maintenance scripts are not read-only.
 
 | Script | Purpose |
 | --- | --- |
-| `forcepoint-backup-cleanup.sh` | Apply retention to Management Server backups from `SG_BACKUP_DIR` and Log Server backups from `LOG_BACKUP_DIR` |
+| `forcepoint-backup-cleanup.sh` | Apply retention to Management Server backups from `SG_BACKUP_DIR` (or the default `${SG_DATA_ROOT_DIR}/backups` when absent) and Log Server backups from `LOG_BACKUP_DIR` |
 
 ## Forcepoint backup cleanup quick start
 
@@ -37,7 +37,7 @@ The script automatically discovers both backup locations:
 
 ~~~text
 /usr/local/forcepoint/smc/data/SGConfiguration.txt
-  -> SG_BACKUP_DIR
+  -> SG_BACKUP_DIR, or ${SG_DATA_ROOT_DIR}/backups when the key is absent
 
 /usr/local/forcepoint/smc/data/LogServerConfiguration.txt
   -> LOG_BACKUP_DIR
