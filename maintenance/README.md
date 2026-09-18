@@ -8,7 +8,7 @@ Unlike the diagnostic scripts in `dist/`, maintenance scripts are not read-only.
 
 | Script | Purpose |
 | --- | --- |
-| `forcepoint-backup-cleanup.sh` | Apply retention to Management Server backups from `SG_BACKUP_DIR` (or the default `${SG_DATA_ROOT_DIR}/backups` when absent) and Log Server backups from `LOG_BACKUP_DIR` |
+| `forcepoint-backup-cleanup.sh` | Plan and enforce guarded retention for independently discovered Management Server and Log Server backups |
 
 ## Forcepoint backup cleanup quick start
 
@@ -46,3 +46,7 @@ The script automatically discovers both backup locations:
 A value such as `LOG_BACKUP_DIR=${SG_DATA_ROOT_DIR}/backups` is safely resolved to the SMC installation root without sourcing the configuration file.
 
 For the complete installation procedure, execution-account check, retention behavior, SMC task configuration, logging, troubleshooting, and rollback instructions, see [Forcepoint backup cleanup](../docs/forcepoint-backup-cleanup.md).
+Observed compatibility note: SMC 7.3.4 can invoke the configured post-task script explicitly through `sh`, while a tested 7.4.1 installation did not show the same incompatibility. The current script includes a shell bootstrap that re-executes under Bash when necessary. See the full compatibility and troubleshooting notes in the main cleanup documentation.
+
+
+The current cleanup supports configurable SMC/config paths, independent SGM/SGL retention, deletion-count safeguards, quiet-period detection, `flock`/atomic-`mkdir` locking, structured run IDs, optional file logging, and functional CI tests. The default invocation remains argument-free for use in the SMC post-task field.
